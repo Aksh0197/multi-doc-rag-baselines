@@ -1,0 +1,5 @@
+method,recall_at_1,recall_at_3,recall_at_5,mrr,multi_doc_hit_rate,answer_exact_match,answer_f1
+hybrid,0.6786,1.0,1.0,0.9643,1.0,1.0,1.0
+tfidf,0.6786,0.9643,1.0,0.9643,0.9286,1.0,1.0
+hybrid_mmr,0.6786,0.9643,1.0,0.9643,0.9286,1.0,1.0
+bm25,0.6786,0.9286,1.0,0.9643,0.8571,1.0,1.0
