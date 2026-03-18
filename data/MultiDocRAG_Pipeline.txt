@@ -1,0 +1,329 @@
+Multi-Document RAG
+for Intelligent QA
+Project Architecture & Implementation Pipeline
+Akshun Agnihotri  |  Vignesh Pathak  |  Swathi Mohankumar
+Natural Language Processing  |  February 2026
+
+1. Project Overview
+This document captures the finalised architecture and implementation pipeline for the Multi-Document RAG for Intelligent QA coursework project. The project synthesises techniques from five key research papers — MADAM-RAG, RankRAG, Self-RAG, the original RAG paper (Lewis et al.), and RAGChecker — into a unified 7-stage pipeline evaluated on two complementary datasets.
+
+1.1 Research Foundation
+Paper
+Core Contribution
+How We Use It
+MADAM-RAG
+Multi-agent debate aggregation for conflicting evidence
+Stage 5: debate loop, conflict resolution, aggregator module
+RankRAG
+Single LLM handles both ranking and generation
+Stage 4: unified LLM re-ranker over retrieved docs
+Self-RAG
+Adaptive retrieval with self-critique reflection tokens
+Stage 6: evidence sentence generation and self-critique prompt
+RAG (Lewis et al.)
+Original RAG: DPR retriever + BART generator end-to-end
+Baseline system we compare against in ablation
+RAGChecker
+Claim-level entailment evaluation framework
+Stage 7: faithfulness and hallucination rate metrics
+
+2. Chosen Datasets
+After evaluating QASPER, MS-MARCO, Natural Questions, and RAMDocs, we finalised two primary datasets: HotpotQA and RAMDocs. Together they cover all three evaluation needs — top-K retrieval benchmarking, multi-agent conflict testing, and built-in reasoning chain verification.
+
+2.1 HotpotQA
+HotpotQA is a large-scale multi-hop QA benchmark with 112,779 Wikipedia-based question-answer pairs. We use the distractor setting, which provides exactly 10 paragraphs per question (2 gold + 8 distractors), making it ideal for top-K retrieval evaluation.
+
+Key fields used
+	•	question — the natural language question string
+	•	answer — gold answer string for EM and F1 computation
+	•	context — list of 10 [title, sentences] paragraph pairs
+	•	supporting_facts — sentence-level reasoning chain (gold evidence)
+	•	type — bridge or comparison (two reasoning types)
+
+Why HotpotQA
+	•	Top-K retrieval: retriever must surface both gold paragraphs from 10 distractors
+	•	Reasoning chains: supporting_facts field gives annotated sentence-level evidence paths
+	•	Multi-hop: questions require combining evidence from at least two documents
+	•	Download: https://hotpotqa.github.io — use dev split (7,405 questions) for coursework
+
+2.2 RAMDocs
+RAMDocs (Retrieval with Ambiguity and Misinformation in Documents) was introduced alongside the MADAM-RAG paper. It simulates realistic retrieval scenarios with deliberately injected conflicting and noisy documents, making it the only dataset purpose-built for multi-agent debate evaluation.
+
+Key fields used
+	•	question — ambiguous natural language query
+	•	gold_answers — list of correct answers per disambiguated entity
+	•	wrong_answers — plausible-but-incorrect answers (misinformation)
+	•	disambig_entity — list of entities that share the ambiguous name in the query
+	•	answer — answer inferrable from the document; 'unknown' for noise documents
+	•	type — gold | misinformation | noise (document type label)
+
+Why RAMDocs
+	•	Multi-agent debate: gold, misinfo, and noise docs create natural 3-way conflict for agents to debate
+	•	Conflict testing: wrong_answers field lets us verify agents suppressed misinformation
+	•	Ambiguity resolution: disambig_entity tests whether the system covers all valid answers
+	•	Download: https://huggingface.co/datasets/HanNight/RAMDocs (500 test queries, all used)
+
+For coursework scope: use HotpotQA dev split (7,405 questions) and all 500 RAMDocs test queries. This gives sufficient statistical power for ablation studies without requiring GPU clusters.
+
+2.3 Dataset Coverage Matrix
+Need
+HotpotQA
+RAMDocs
+Notes
+Top-K retrieval with gold labels
+Yes — native
+Partial
+HotpotQA gold paragraphs are the ground truth
+Multi-agent debate with conflict
+Partial (simulate)
+Yes — native
+RAMDocs has built-in misinfo and noise docs
+Reasoning chains (why correct?)
+Yes — supporting_facts
+No
+HotpotQA annotated at sentence level
+Ambiguity resolution
+No
+Yes — disambig_entity
+RAMDocs has multiple valid answers per query
+Misinformation suppression
+No
+Yes — wrong_answers
+RAMDocs labels wrong answers explicitly
+
+
+3. System Architecture
+Both datasets flow through an identical 7-stage pipeline. The same components — hybrid retriever, LLM ranker, multi-agent debate loop, and answer generator — handle both HotpotQA and RAMDocs queries. Evaluation metrics diverge at Stage 7 based on what each dataset provides.
+
+Stage
+Component
+Description
+Dataset role
+1
+Data loading
+Load, parse, and normalise HotpotQA + RAMDocs into unified format
+Both: extract questions, docs, gold labels
+2
+Hybrid index
+Build BM25 sparse index + FAISS dense index per query
+Both: index available paragraphs/documents
+3
+Top-K retrieval
+Interpolate BM25 and dense scores, return top-K candidates
+HotpotQA: Recall@K; RAMDocs: gold precision@K
+4
+LLM ranker
+Re-score retrieved docs with unified ranker-generator (RankRAG-style)
+RAMDocs: verify gold ranks above misinfo
+5
+Multi-agent debate
+One agent per document debates over 2-3 rounds; aggregator resolves conflict
+RAMDocs: gold agent vs misinfo agent test
+6
+Answer generation
+Generate answer + evidence sentences (Self-RAG-style reasoning trace)
+HotpotQA: compare evidence vs supporting_facts
+7
+Evaluation
+Compute all metrics, run RAGChecker for claim-level faithfulness
+Both: dataset-specific + shared metrics
+
+
+4. Implementation Pipeline
+  Stage 1 — Data Loading & Preprocessing  
+HotpotQA loading
+from datasets import load_dataset  # Distractor setting: 10 paragraphs per question (2 gold + 8 distractors) hotpot = load_dataset('hotpot_qa', 'distractor') # Use dev split for coursework: 7,405 labelled questions dev = hotpot['validation'] # Fields: question, answer, context, supporting_facts, type, level
+RAMDocs loading
+import json  # Load all 500 test queries from the JSONL file with open('RAMDocs_test.jsonl') as f:     ramdocs = [json.loads(line) for line in f]  # Fields per record: # question, answer, type (gold/misinformation/noise), # gold_answers, wrong_answers, disambig_entity
+
+  Stage 2 — Hybrid Index Construction  
+Build one BM25 sparse index and one FAISS dense vector index per query from the available document pool. Use the pre-trained all-mpnet-base-v2 sentence transformer (fine-tuned on MS-MARCO) — no additional training required.
+from sentence_transformers import SentenceTransformer from rank_bm25 import BM25Okapi import faiss, numpy as np  encoder = SentenceTransformer('sentence-transformers/all-mpnet-base-v2')  def build_index(docs: list[str]):     # BM25 sparse index     tokenised = [d.lower().split() for d in docs]     bm25 = BM25Okapi(tokenised)     # FAISS dense index (cosine similarity via normalised inner product)     embeddings = encoder.encode(docs, normalize_embeddings=True)     index = faiss.IndexFlatIP(768)  # 768-dim for mpnet     index.add(embeddings.astype(np.float32))     return bm25, index, embeddings
+For HotpotQA: build a fresh index per query from the 10 context paragraphs. For RAMDocs: build per query from all provided documents (gold + misinfo + noise). This mirrors realistic per-query retrieval.
+
+  Stage 3 — Hybrid Top-K Retrieval  
+Interpolate BM25 and dense scores with a mixing parameter alpha. The alpha value is an ablation variable — test 0.0 (dense only), 1.0 (BM25 only), and 0.5 (hybrid) to find the optimal balance.
+def hybrid_retrieve(query: str, docs: list[str], bm25, faiss_idx,                     k: int = 5, alpha: float = 0.5) -> list[int]:     # BM25 scores — normalised to [0, 1]     bm25_scores = np.array(bm25.get_scores(query.lower().split()))     bm25_norm   = bm25_scores / (bm25_scores.max() + 1e-9)      # Dense scores — cosine similarity (already normalised)     q_emb = encoder.encode([query], normalize_embeddings=True).astype(np.float32)     dense_raw, _ = faiss_idx.search(q_emb, len(docs))     dense_norm = dense_raw[0] / (dense_raw[0].max() + 1e-9)      # Interpolate: alpha=1.0 is pure BM25, alpha=0.0 is pure dense     hybrid_scores = alpha * bm25_norm + (1 - alpha) * dense_norm     ranked_indices = np.argsort(hybrid_scores)[::-1]     return ranked_indices[:k].tolist()  # Metric: Recall@K for HotpotQA def recall_at_k(retrieved_ids, gold_ids, k):     return len(set(retrieved_ids[:k]) & set(gold_ids)) / len(gold_ids)
+
+Retrieval metrics
+Metric
+Dataset
+What it measures
+Recall@K (K=2,3,5,10)
+HotpotQA
+Were both gold paragraphs in the top-K retrieved? Primary retrieval metric.
+MRR
+HotpotQA
+Mean reciprocal rank of first gold paragraph — measures ranking quality.
+Gold precision@K
+RAMDocs
+What fraction of top-K retrieved docs are gold (not misinfo/noise)?
+Noise suppression rate
+RAMDocs
+What fraction of noise docs were excluded from top-K?
+
+
+  Stage 4 — Unified LLM Ranker (RankRAG-style)  
+Re-score the top-K retrieved documents using the same LLM that will generate the final answer. This eliminates the need for a separate reranking model — the core insight from RankRAG. Each document receives a 1-5 relevance score; only the top-k' pass to the debate stage.
+RANK_PROMPT = '''Question: {question}  Passage: {passage}  Rate how relevant this passage is for answering the question. Reply with a single integer from 1 (irrelevant) to 5 (highly relevant). Score: '''  def rank_documents(question: str, retrieved_docs: list[str], llm_call) -> list[tuple]:     scored = []     for doc in retrieved_docs:         prompt = RANK_PROMPT.format(question=question, passage=doc)         response = llm_call(prompt).strip()         try:             score = int(response[0])  # extract leading digit         except:             score = 1         scored.append((score, doc))     # Return in descending score order     return sorted(scored, reverse=True)
+RAMDocs key check: gold documents should rank above misinformation documents. Track this as 'ranking suppression accuracy' — fraction of queries where all gold docs rank above all misinfo docs. This is a standalone result.
+
+  Stage 5 — Multi-Agent Debate (MADAM-RAG style)  
+Assign one LLM agent per retrieved document. Each agent reads only its assigned document and proposes an answer. Over 2-3 rounds agents critique each other. A final aggregator synthesises the answer from the debate transcript.
+def run_debate(question: str, docs: list[str], llm_call,                rounds: int = 2) -> str:     # Initialise: each agent proposes an answer from its document only     agents = []     for doc in docs:         init_prompt = (             f'Based ONLY on the following text, answer the question.\n'             f'Question: {question}\nText: {doc}\nAnswer:'         )         agents.append({'doc': doc, 'answer': llm_call(init_prompt)})      # Debate rounds: each agent sees all other answers and can revise     for round_num in range(rounds):         for i, agent in enumerate(agents):             other_answers = [a['answer'] for j, a in enumerate(agents) if j != i]             debate_prompt = (                 f'Your current answer: {agent["answer"]}\n'                 f'Other agents said: {other_answers}\n'                 f'Do you revise your answer or maintain it? Answer:'             )             agent['answer'] = llm_call(debate_prompt)      # Aggregator: synthesise final answer from all debate positions     return aggregate(question, agents, llm_call)  def aggregate(question: str, agents: list[dict], llm_call) -> str:     transcript = '\n'.join([f'Agent {i+1}: {a["answer"]}' for i, a in enumerate(agents)])     agg_prompt = (         f'Question: {question}\n\n'         f'Agent debate transcript:\n{transcript}\n\n'         f'Based on the debate, give the final answer. '         f'If sources conflict, identify and discard misinformation. '         f'If the query is ambiguous, list all valid answers separately.\nFinal answer:'     )     return llm_call(agg_prompt)
+
+Debate metrics
+	•	Debate win rate (HotpotQA): does the final answer match the gold answer?
+	•	Misinfo suppression rate (RAMDocs): is wrong_answer absent from the final output?
+	•	Ambiguity resolution (RAMDocs): does the output list all disambig_entity answers?
+	•	Answer consistency: does the answer stabilise or keep changing across rounds?
+
+
+  Stage 6 — Answer Generation + Reasoning Trace  
+Generate the final answer together with the specific evidence sentences used (Self-RAG-style). For HotpotQA, these evidence sentences are directly comparable against the gold supporting_facts field — giving built-in reasoning chain verification.
+GEN_PROMPT = '''Answer the question using the provided passages. Also list the exact sentences you used as evidence.  Question: {question}  Passages: {passages}  Answer: [your answer here] Evidence sentences: [list each sentence that directly supports your answer] '''  def generate_answer(question: str, ranked_docs: list[str],                     debate_context: str, llm_call) -> dict:     passages = '\n\n'.join([f'[{i+1}] {d}' for i, d in enumerate(ranked_docs)])     if debate_context:         passages += f'\n\nDebate conclusion: {debate_context}'     response = llm_call(GEN_PROMPT.format(question=question, passages=passages))     # Parse answer and evidence from response     lines = response.split('\n')     answer = next((l.replace('Answer:', '').strip() for l in lines if l.startswith('Answer:')), response)     evidence = [l.strip('- ') for l in lines if l.startswith('Evidence') or l.startswith('-')]     return {'answer': answer, 'evidence': evidence}
+The 'evidence' field in the output is the reasoning trace. For HotpotQA: compare these sentences against supporting_facts using token F1. This gives you reasoning chain verification that QASPER alone cannot provide.
+
+  Stage 7 — Evaluation & Metrics  
+Compute all metrics after the full pipeline runs. HotpotQA and RAMDocs share Answer F1 and faithfulness via RAGChecker. Each dataset then contributes its own diagnostic metrics.
+from collections import Counter  def token_f1(predicted: str, gold: str) -> float:     p_tokens = predicted.lower().split()     g_tokens = gold.lower().split()     common = Counter(p_tokens) & Counter(g_tokens)     n_common = sum(common.values())     if n_common == 0:         return 0.0     precision = n_common / len(p_tokens)     recall    = n_common / len(g_tokens)     return 2 * precision * recall / (precision + recall)  def exact_match(predicted: str, gold: str) -> bool:     return predicted.strip().lower() == gold.strip().lower()  def recall_at_k(retrieved_ids: list, gold_ids: list, k: int) -> float:     return len(set(retrieved_ids[:k]) & set(gold_ids)) / max(len(gold_ids), 1)  def misinfo_suppressed(generated: str, wrong_answers: list[str]) -> bool:     generated_lower = generated.lower()     return not any(w.lower() in generated_lower for w in wrong_answers)  def ambiguity_resolved(generated: str, gold_answers: list[str]) -> float:     # What fraction of valid answers appear in the output?     found = sum(1 for g in gold_answers if g.lower() in generated.lower())     return found / max(len(gold_answers), 1)
+
+
+5. Complete Metrics Reference
+
+5.1 Retriever Metrics
+Metric
+Dataset
+Definition
+Recall@K (K=2,3,5,10)
+HotpotQA
+Fraction of gold paragraphs present in top-K retrieved. Primary retrieval metric.
+MRR
+HotpotQA
+Mean reciprocal rank of the first gold paragraph across all queries.
+Gold precision@K
+RAMDocs
+Fraction of top-K retrieved documents that are gold (not misinfo or noise).
+Noise suppression rate
+RAMDocs
+Fraction of noise documents successfully excluded from top-K.
+Ranking suppression accuracy
+RAMDocs
+Fraction of queries where all gold docs rank above all misinfo docs after Stage 4.
+
+5.2 Generator Metrics
+Metric
+Dataset
+Definition
+Answer F1
+Both
+Token-level F1 between generated answer and gold answer.
+Exact Match (EM)
+Both
+Binary: is the generated answer string identical to the gold answer?
+Supporting fact F1
+HotpotQA
+Token F1 between generated evidence sentences and gold supporting_facts.
+Joint EM
+HotpotQA
+Answer EM AND supporting fact EM both correct. Official HotpotQA metric.
+Misinfo suppression rate
+RAMDocs
+Fraction of queries where no wrong_answer appears in the generated output.
+Ambiguity resolution
+RAMDocs
+Fraction of gold_answers covered in the output for ambiguous queries.
+Faithfulness
+Both
+RAGChecker: fraction of generated claims entailed by the retrieved context.
+Hallucination rate
+Both
+RAGChecker: fraction of generated claims not supported by context or gold.
+
+
+6. Ablation Study Design
+The ablation study compares three retrieval strategies and two pipeline configurations (with and without the debate stage) across both datasets.
+
+6.1 Retrieval ablation (alpha sweep)
+Configuration
+Alpha
+HotpotQA result
+RAMDocs result
+Dense only
+0.0
+Recall@5 = ?
+Gold precision@5 = ?
+BM25 only
+1.0
+Recall@5 = ?
+Gold precision@5 = ?
+Hybrid (best)
+0.5 (tune)
+Recall@5 = ?
+Gold precision@5 = ?
+
+6.2 Debate ablation
+Configuration
+Debate rounds
+HotpotQA Answer F1
+RAMDocs Misinfo Supp.
+Vanilla RAG (no debate)
+0
+?
+?
+1-round debate
+1
+?
+?
+2-round debate
+2
+?
+?
+3-round debate
+3
+?
+?
+
+Fill in the result columns as you run experiments. The expected finding is: hybrid > BM25-only > dense-only on Recall@K for HotpotQA, and 2-round debate achieves the best misinfo suppression on RAMDocs without the latency cost of 3 rounds.
+
+
+7. Dependencies & Environment
+
+Library
+Version
+Purpose
+datasets (HuggingFace)
+>=2.0
+Load HotpotQA via load_dataset('hotpot_qa', 'distractor')
+sentence-transformers
+>=2.2
+all-mpnet-base-v2 for dense encoding (768-dim)
+faiss-cpu
+>=1.7
+IndexFlatIP for cosine similarity dense retrieval
+rank_bm25
+>=0.2
+BM25Okapi sparse retrieval index
+openai / anthropic
+latest
+LLM API calls for ranker, debate agents, and generator
+numpy
+>=1.24
+Score normalisation and array operations
+ragchecker
+latest
+Claim-level faithfulness and hallucination rate metrics
+
+# Install all dependencies pip install datasets sentence-transformers faiss-cpu rank_bm25 openai numpy  # RAMDocs: download from HuggingFace # huggingface-cli download HanNight/RAMDocs  # HotpotQA: loads automatically via datasets library # from datasets import load_dataset # hotpot = load_dataset('hotpot_qa', 'distractor')
+
+
+8. Summary & Expected Results
+
+The project makes four primary claims, each testable with the pipeline and metrics above:
+
+	•	Hybrid retrieval outperforms BM25-only on Recall@K on HotpotQA. Dense retrieval captures semantic similarity that keyword search misses for paraphrased or complex multi-hop questions.
+	•	LLM re-ranking suppresses misinformation documents before generation. Gold docs rank above misinfo docs on RAMDocs, reducing the burden on the debate stage.
+	•	Multi-agent debate improves misinfo suppression rate over vanilla RAG. Even when misinformation survives retrieval and ranking, the debate loop identifies and discards it via consensus.
+	•	Self-RAG-style evidence generation improves reasoning trace quality. Prompting the generator to output evidence sentences improves Supporting Fact F1 on HotpotQA compared to answer-only generation.
+
+Baseline to beat: the original vanilla RAG (Lewis et al.) using DPR + BART on HotpotQA. The official HotpotQA leaderboard provides standard numbers to compare against. For RAMDocs: the MADAM-RAG paper reports 32.60 exact match for Llama-3.3-70B as the baseline without debate.

@@ -1,0 +1,68 @@
+[
+  {
+    "id": "paper_rag",
+    "title": "Lewis et al. RAG",
+    "category": "paper",
+    "text": "Lewis et al. introduced Retrieval-Augmented Generation for knowledge-intensive NLP. The original setup combines a neural retriever with a sequence generator so the model can retrieve passages and generate grounded answers. In the project pipeline, this paper is the vanilla baseline that later multi-document and reranking methods must beat."
+  },
+  {
+    "id": "paper_rankrag",
+    "title": "RankRAG",
+    "category": "paper",
+    "text": "RankRAG motivates Stage 4 of the pipeline. Its key idea is to let the same language model handle both document ranking and answer generation, instead of using a separate reranker. In this project, top-k retrieved documents are rescored by the generator-style model before final context selection."
+  },
+  {
+    "id": "paper_selfrag",
+    "title": "Self-RAG",
+    "category": "paper",
+    "text": "Self-RAG motivates Stage 6. The method emphasizes adaptive retrieval, self-critique, and evidence-aware generation. In the project pipeline, it inspires generating explicit evidence sentences and using a reasoning trace rather than producing an answer only."
+  },
+  {
+    "id": "paper_ragchecker",
+    "title": "RAGChecker",
+    "category": "paper",
+    "text": "RAGChecker motivates Stage 7 evaluation. Its role is claim-level checking of whether generated content is supported by retrieved evidence. In the project plan, it is used for faithfulness and hallucination rate metrics after the answer is produced."
+  },
+  {
+    "id": "paper_madamrag",
+    "title": "MADAM-RAG",
+    "category": "paper",
+    "text": "MADAM-RAG motivates Stage 5. The method uses multiple document-conditioned agents, iterative debate, and a centralized aggregator to resolve conflicting evidence. This is the main paper behind the multi-document conflict resolution part of the pipeline and the RAMDocs evaluation setup."
+  },
+  {
+    "id": "dataset_hotpotqa",
+    "title": "HotpotQA Dataset",
+    "category": "dataset",
+    "text": "HotpotQA is the chosen dataset for top-k retrieval benchmarking. In the distractor setting, each question has exactly 10 paragraphs made of 2 gold paragraphs and 8 distractors. It is useful because it supports multi-hop reasoning, top-k retrieval evaluation, and reasoning-chain verification through the supporting_facts field."
+  },
+  {
+    "id": "dataset_ramdocs",
+    "title": "RAMDocs Dataset",
+    "category": "dataset",
+    "text": "RAMDocs is the chosen dataset for ambiguity and misinformation-heavy multi-document QA. It was introduced alongside the MADAM-RAG work and contains gold, misinformation, and noise documents. Important fields include gold_answers, wrong_answers, disambig_entity, and type labels such as gold, misinformation, and noise."
+  },
+  {
+    "id": "method_hybrid_retrieval",
+    "title": "Hybrid Top-K Retrieval",
+    "category": "method",
+    "text": "Stage 3 uses hybrid top-k retrieval. The retriever interpolates sparse and semantic scores with alpha, where alpha equal to 1.0 is BM25 only, alpha equal to 0.0 is dense only, and alpha equal to 0.5 is the hybrid setting. The expected finding in the ablation is that the hybrid setting outperforms either single retriever on Recall@K."
+  },
+  {
+    "id": "method_debate_ablation",
+    "title": "Debate Ablation",
+    "category": "method",
+    "text": "The debate ablation compares vanilla RAG with 1-round, 2-round, and 3-round debate. The expected result in the project notes is that 2-round debate gives the best misinformation suppression without paying the extra latency cost of 3 rounds. This makes it the practical default for the multi-document conflict stage."
+  },
+  {
+    "id": "method_metrics",
+    "title": "Metrics Reference",
+    "category": "metric",
+    "text": "Recall@K measures whether the gold documents are present in the top-k retrieved set. MRR measures how early the first gold document appears in the ranked list. Ranking suppression accuracy checks whether gold documents rank above misinformation documents after reranking. Supporting fact F1 compares generated evidence sentences with gold supporting_facts. Faithfulness and hallucination rate come from RAGChecker-style evaluation."
+  },
+  {
+    "id": "pipeline_stages",
+    "title": "Seven-Stage Pipeline",
+    "category": "pipeline",
+    "text": "The full pipeline has seven stages: data loading, hybrid index construction, top-k retrieval, LLM reranking, multi-agent debate, answer generation with evidence, and final evaluation. Stage 4 is the RankRAG-style reranker, Stage 5 is the MADAM-RAG style debate stage, Stage 6 is the Self-RAG style evidence-aware generator, and Stage 7 computes faithfulness and hallucination metrics."
+  }
+]

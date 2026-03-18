@@ -1,0 +1,86 @@
+[
+  {
+    "id": "q1",
+    "question": "Which dataset is ideal for top-k retrieval evaluation because it provides 10 paragraphs with 2 gold and 8 distractors?",
+    "gold_doc_ids": ["dataset_hotpotqa"],
+    "answer_aliases": ["HotpotQA"]
+  },
+  {
+    "id": "q2",
+    "question": "Which dataset was introduced with MADAM-RAG and is purpose-built for multi-agent debate with misinformation and noise documents?",
+    "gold_doc_ids": ["dataset_ramdocs", "paper_madamrag"],
+    "answer_aliases": ["RAMDocs"]
+  },
+  {
+    "id": "q3",
+    "question": "Which paper motivates using one language model for both reranking and generation at Stage 4?",
+    "gold_doc_ids": ["paper_rankrag", "pipeline_stages"],
+    "answer_aliases": ["RankRAG"]
+  },
+  {
+    "id": "q4",
+    "question": "Which paper motivates the multi-agent debate and centralized aggregator used to resolve conflicting evidence?",
+    "gold_doc_ids": ["paper_madamrag", "pipeline_stages"],
+    "answer_aliases": ["MADAM-RAG", "MADAM RAG"]
+  },
+  {
+    "id": "q5",
+    "question": "Which paper motivates generating evidence sentences and self-critique at Stage 6?",
+    "gold_doc_ids": ["paper_selfrag", "pipeline_stages"],
+    "answer_aliases": ["Self-RAG", "Self RAG"]
+  },
+  {
+    "id": "q6",
+    "question": "What two datasets were selected to cover top-k retrieval benchmarking and conflict-heavy multi-document QA?",
+    "gold_doc_ids": ["dataset_hotpotqa", "dataset_ramdocs"],
+    "answer_aliases": ["HotpotQA and RAMDocs", "HotpotQA, RAMDocs"]
+  },
+  {
+    "id": "q7",
+    "question": "What alpha value corresponds to the hybrid retrieval setting in the ablation?",
+    "gold_doc_ids": ["method_hybrid_retrieval"],
+    "answer_aliases": ["0.5"]
+  },
+  {
+    "id": "q8",
+    "question": "Which retrieval setting is expected to outperform both BM25-only and dense-only on Recall@K?",
+    "gold_doc_ids": ["method_hybrid_retrieval"],
+    "answer_aliases": ["hybrid", "hybrid retrieval"]
+  },
+  {
+    "id": "q9",
+    "question": "What metric measures whether the gold documents are present in the retrieved top-k set?",
+    "gold_doc_ids": ["method_metrics"],
+    "answer_aliases": ["Recall@K", "recall at k"]
+  },
+  {
+    "id": "q10",
+    "question": "What metric checks whether gold documents rank above misinformation documents after reranking?",
+    "gold_doc_ids": ["method_metrics"],
+    "answer_aliases": ["ranking suppression accuracy"]
+  },
+  {
+    "id": "q11",
+    "question": "How many debate rounds are expected to give the best misinformation suppression without the latency cost of 3 rounds?",
+    "gold_doc_ids": ["method_debate_ablation"],
+    "answer_aliases": ["2 rounds", "2-round debate", "two rounds"]
+  },
+  {
+    "id": "q12",
+    "question": "Which stage computes faithfulness and hallucination metrics inspired by RAGChecker?",
+    "gold_doc_ids": ["paper_ragchecker", "pipeline_stages"],
+    "answer_aliases": ["Stage 7"]
+  },
+  {
+    "id": "q13",
+    "question": "Which dataset supports reasoning-chain verification and what field provides the gold evidence?",
+    "gold_doc_ids": ["dataset_hotpotqa", "method_metrics"],
+    "answer_aliases": ["HotpotQA and supporting_facts", "HotpotQA with supporting_facts"]
+  },
+  {
+    "id": "q14",
+    "question": "Which dataset supports ambiguity resolution and what field lists the entities that share the ambiguous name?",
+    "gold_doc_ids": ["dataset_ramdocs"],
+    "answer_aliases": ["RAMDocs and disambig_entity", "RAMDocs with disambig_entity"]
+  }
+]
