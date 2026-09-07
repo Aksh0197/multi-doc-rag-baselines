@@ -378,6 +378,6 @@ const doc = new Document({
 });
 
 Packer.toBuffer(doc).then(buffer => {
-  fs.writeFileSync("results/final_summary_report.docx", buffer);
-  console.log("Written: results/final_summary_report.docx");
+  fs.writeFileSync("docs/final_summary_report.docx", buffer);
+  console.log("Written: docs/final_summary_report.docx");
 });

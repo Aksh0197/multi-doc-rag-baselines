@@ -384,6 +384,6 @@ const doc = new Document({
 });
 
 Packer.toBuffer(doc).then(buffer => {
-  fs.writeFileSync("results/explainers/project_deep_dive.docx", buffer);
-  console.log("Written: results/explainers/project_deep_dive.docx");
+  fs.writeFileSync("docs/explainers/project_deep_dive.docx", buffer);
+  console.log("Written: docs/explainers/project_deep_dive.docx");
 });
