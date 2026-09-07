@@ -1,0 +1,13 @@
+.DS_Store
+__pycache__/
+.pytest_cache/
+.venv/
+*.pyc
+data/raw/
+results/runtime/
+results/runtime_faithfulness/
+results/runtime_llm_generation/
+results/runtime_llm_rerank/
+node_modules/
+.claude/
+*.log

@@ -1,0 +1,19 @@
+{
+  "hotpotqa_path": "data/raw/hotpotqa/hotpot_dev_distractor_v1.json",
+  "ramdocs_path": "data/raw/ramdocs/RAMDocs_test.jsonl",
+  "output_dir": "results/runtime",
+  "retrieval_methods": ["tfidf", "bm25", "dense", "hybrid", "hybrid_mmr"],
+  "k_values": [2, 3, 5, 10],
+  "rerank_top_k": 5,
+  "final_top_k": 3,
+  "enable_reranker": true,
+  "enable_multi_agent_debate": true,
+  "debate_max_sentences_per_agent": 2,
+  "hybrid_alpha": 0.5,
+  "mmr_lambda": 0.75,
+  "dense_backend": "lsa",
+  "dense_model_name": "sentence-transformers/all-mpnet-base-v2",
+  "dense_lsa_components": 128,
+  "max_hotpot_samples": 200,
+  "max_ramdocs_queries": 200
+}

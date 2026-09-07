@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Multi-Document RAG Evaluation Framework</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.0/dist/reveal.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.0/dist/theme/black.css"/>
+  <style>
+    /* ── Base ── */
+    :root {
+      --bg:        #080818;
+      --bg2:       #0f0f2a;
+      --blue:      #4fc3f7;
+      --purple:    #ce93d8;
+      --green:     #69f0ae;
+      --orange:    #ffab40;
+      --red:       #ef5350;
+      --gold:      #ffd54f;
+      --teal:      #4dd0e1;
+      --text:      #e8e8f4;
+      --muted:     #9090b0;
+      --card-bg:   rgba(255,255,255,0.05);
+      --card-border:rgba(255,255,255,0.12);
+    }
+
+    .reveal { font-family: 'Segoe UI', system-ui, sans-serif; }
+    .reveal .slides { text-align: left; }
+    .reveal h1, .reveal h2, .reveal h3 { text-transform: none; letter-spacing: -0.02em; }
+    .reveal h1 { font-size: 2.2em; }
+    .reveal h2 { font-size: 1.55em; color: var(--blue); margin-bottom: 0.5em; }
+    .reveal h3 { font-size: 1.1em; color: var(--gold); }
+    .reveal p, .reveal li { font-size: 0.82em; line-height: 1.6; }
+    .reveal ul { list-style: none; padding-left: 0; }
+    .reveal ul li::before { content: "▸ "; color: var(--blue); }
+    .reveal section { padding: 0 3% !important; }
+
+    /* ── Utility ── */
+    .accent   { color: var(--gold); font-weight: 700; }
+    .blue     { color: var(--blue); }
+    .green    { color: var(--green); }
+    .orange   { color: var(--orange); }
+    .purple   { color: var(--purple); }
+    .red      { color: var(--red); }
+    .teal     { color: var(--teal); }
+    .muted    { color: var(--muted); font-size: 0.75em; }
+    .center   { text-align: center; }
+    .bold     { font-weight: 700; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 14px 18px;
+    }
+    .card-grid {
+      display: grid;
+      gap: 12px;
+    }
+    .card-grid-2 { grid-template-columns: 1fr 1fr; }
+    .card-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .card-grid-5 { grid-template-columns: repeat(5, 1fr); }
+
+    /* ── Title Slide ── */
+    .title-slide { text-align: center !important; }
+    .title-slide h1 { font-size: 2.4em; line-height: 1.15; margin-bottom: 0.3em; }
+    .title-pill {
+      display: inline-block;
+      background: linear-gradient(135deg, #1565c0, #6a1b9a);
+      border-radius: 30px;
+      padding: 6px 22px;
+      font-size: 0.75em;
+      margin: 4px 5px;
+      color: white;
+    }
+    .subtitle-line { color: var(--muted); font-size: 0.78em; margin-top: 1em; }
+
+    /* ── Challenge boxes ── */
+    .challenge-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 14px;
+      margin-top: 10px;
+    }
+    .challenge-box {
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+    }
+    .challenge-box .icon { font-size: 1.8em; }
+    .challenge-box h3 { margin: 6px 0; font-size: 0.9em; color: white; }
+    .challenge-box p  { font-size: 0.7em; color: var(--muted); margin: 0; }
+
+    /* ── Example box ── */
+    .example-box {
+      background: rgba(79,195,247,0.07);
+      border-left: 4px solid var(--blue);
+      border-radius: 0 8px 8px 0;
+      padding: 12px 16px;
+      margin: 10px 0;
+      font-size: 0.8em;
+    }
+    .example-box .label {
+      font-size: 0.72em;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--blue);
+      margin-bottom: 4px;
+    }
+
+    /* ── Pipeline SVG Slide ── */
+    .pipeline-wrap { overflow: visible; }
+
+    /* ── Paper cards ── */
+    .paper-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+    .paper-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+    }
+    .paper-card.blue::before  { background: var(--blue); }
+    .paper-card.purple::before { background: var(--purple); }
+    .paper-card.green::before { background: var(--green); }
+    .paper-card.orange::before { background: var(--orange); }
+    .paper-card.teal::before  { background: var(--teal); }
+    .paper-card .title { font-size: 0.78em; font-weight: 700; color: white; margin-bottom: 4px; }
+    .paper-card .contrib { font-size: 0.68em; color: var(--muted); }
+    .paper-card .tag {
+      display: inline-block;
+      font-size: 0.62em;
+      padding: 2px 8px;
+      border-radius: 20px;
+      margin-top: 6px;
+    }
+
+    /* ── Retrieval diagram ── */
+    .retrieval-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+    }
+    .method-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .method-card .badge {
+      font-size: 0.62em;
+      padding: 2px 10px;
+      border-radius: 20px;
+      font-weight: 700;
+      display: inline-block;
+      margin-bottom: 8px;
+    }
+    .method-card h3 { font-size: 0.9em; margin: 0 0 6px; color: white; }
+    .method-card p  { font-size: 0.68em; color: var(--muted); margin: 0 0 8px; }
+    .method-card .step { font-size: 0.68em; color: var(--text); margin: 3px 0; }
+
+    /* ── Metric tables ── */
+    .metric-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.75em;
+      margin-top: 10px;
+    }
+    .metric-table th {
+      background: rgba(79,195,247,0.15);
+      color: var(--blue);
+      padding: 8px 12px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .metric-table td {
+      padding: 7px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      color: var(--text);
+    }
+    .metric-table tr:hover td { background: rgba(255,255,255,0.03); }
+    .metric-table .highlight td { background: rgba(105,240,174,0.08); }
+    .metric-table .highlight td:first-child { border-left: 3px solid var(--green); }
+    .best { color: var(--green); font-weight: 700; }
+    .good { color: var(--orange); font-weight: 600; }
+
+    /* ── CSS bar charts ── */
+    .bar-chart { margin-top: 10px; }
+    .bar-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+      gap: 10px;
+    }
+    .bar-label { font-size: 0.68em; color: var(--text); min-width: 110px; text-align: right; }
+    .bar-track {
+      flex: 1;
+      background: rgba(255,255,255,0.08);
+      border-radius: 4px;
+      height: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      position: absolute;
+      left: 0;
+      display: flex;
+      align-items: center;
+      padding-left: 8px;
+      font-size: 0.62em;
+      font-weight: 700;
+      color: white;
+      transition: width 0.6s ease;
+    }
+    .bar-val { font-size: 0.68em; color: var(--muted); min-width: 38px; }
+
+    /* ── Insight cards ── */
+    .insight-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .insight-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .insight-card .num {
+      font-size: 1.8em;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .insight-card .desc { font-size: 0.72em; color: var(--muted); margin-top: 4px; }
+
+    /* ── Conclusion ── */
+    .conclusion-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 10px;
+    }
+    .built-pill {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .built-pill .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-top: 6px;
+      flex-shrink: 0;
+    }
+    .built-pill p { font-size: 0.76em; color: var(--text); margin: 0; }
+
+    /* ── Two-col layout ── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .two-col-6040 { display: grid; grid-template-columns: 3fr 2fr; gap: 20px; }
+
+    /* ── Slide header rule ── */
+    .slide-header {
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding-bottom: 6px;
+      margin-bottom: 14px;
+    }
+
+    /* ── Step numbers ── */
+    .step-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      font-size: 0.72em;
+      font-weight: 700;
+      margin-right: 6px;
+    }
+
+    /* ── Debate diagram ── */
+    .agent-row {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin: 10px 0;
+    }
+    .agent-box {
+      background: rgba(206,147,216,0.12);
+      border: 1px solid rgba(206,147,216,0.35);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.68em;
+      text-align: center;
+    }
+    .arbiter-box {
+      background: rgba(255,171,64,0.12);
+      border: 2px solid var(--orange);
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-size: 0.75em;
+      text-align: center;
+      font-weight: 700;
+    }
+    .arrow-down { text-align: center; color: var(--muted); font-size: 1.2em; margin: 4px 0; }
+
+    /* ── Failure mode bars ── */
+    .fm-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 10px; }
+    .fm-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 14px;
+      text-align: center;
+    }
+    .fm-card .pct { font-size: 2em; font-weight: 800; }
+    .fm-card .lbl { font-size: 0.65em; color: var(--muted); margin-top: 2px; }
+
+    /* ── Progress indicator override ── */
+    .reveal .progress { color: var(--blue); }
+    .reveal .slide-number { color: var(--muted); font-size: 0.45em; }
+
+  </style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 1 — TITLE
+══════════════════════════════════════════════ -->
+<section data-background-gradient="radial-gradient(ellipse at 30% 40%, #1a0a3a 0%, #080818 70%)" class="title-slide">
+  <div style="padding-top:5%">
+    <div style="margin-bottom:16px">
+      <span style="font-size:0.72em;color:var(--muted);letter-spacing:0.15em;text-transform:uppercase">Research Project</span>
+    </div>
+    <h1 style="background:linear-gradient(135deg,#4fc3f7,#ce93d8,#ffd54f);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">
+      Multi-Document<br/>RAG Evaluation<br/>Framework
+    </h1>
+    <div style="margin:18px 0">
+      <span class="title-pill">RAG</span>
+      <span class="title-pill">RankRAG</span>
+      <span class="title-pill">Self-RAG</span>
+      <span class="title-pill">MADAM-RAG</span>
+      <span class="title-pill">RAGChecker</span>
+    </div>
+    <p class="subtitle-line">End-to-end benchmark pipeline grounded in 5 research papers</p>
+    <p class="subtitle-line" style="margin-top:6px">HotpotQA · RAMDocs · 3 LLM Backends · Faithfulness Analysis</p>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 2 — THE PROBLEM
+══════════════════════════════════════════════ -->
+<section data-background-color="#080818">
+  <div class="slide-header">
+    <h2>The Problem</h2>
+    <p class="muted">Multi-document question answering is fundamentally harder than single-passage retrieval</p>
+  </div>
+
+  <div class="example-box" style="margin-bottom:14px">
+    <div class="label">Example multi-hop question</div>
+    <span style="color:var(--gold);font-size:0.92em;font-weight:600">"What is the nationality of the director of Spectre?"</span>
+    <div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap">
+      <span style="background:rgba(79,195,247,0.1);border:1px solid var(--blue);border-radius:6px;padding:4px 10px;font-size:0.7em">
+        📄 Doc 1: <span class="blue">Spectre (film)</span> → director = Sam Mendes
+      </span>
+      <span style="font-size:0.7em;color:var(--muted);align-self:center">+</span>
+      <span style="background:rgba(206,147,216,0.1);border:1px solid var(--purple);border-radius:6px;padding:4px 10px;font-size:0.7em">
+        📄 Doc 2: <span class="purple">Sam Mendes</span> → nationality = British
+      </span>
+      <span style="font-size:0.7em;color:var(--muted);align-self:center">→</span>
+      <span style="background:rgba(105,240,174,0.1);border:1px solid var(--green);border-radius:6px;padding:4px 10px;font-size:0.7em">
+        ✅ <span class="green">British</span>
+      </span>
+    </div>
+  </div>
+
+  <div class="challenge-grid">
+    <div class="challenge-box card">
+      <div class="icon">🔗</div>
+      <h3>Multi-hop Reasoning</h3>
+      <p>Answer requires chaining evidence across 2+ documents — no single doc contains the full answer</p>
+    </div>
+    <div class="challenge-box card">
+      <div class="icon">🎭</div>
+      <h3>Misinformation in Corpus</h3>
+      <p>Real corpora contain adversarial documents designed to mislead — model must suppress them</p>
+    </div>
+    <div class="challenge-box card">
+      <div class="icon">🌀</div>
+      <h3>Hallucination Risk</h3>
+      <p>LLMs generate plausible but unsupported text — hard to distinguish from grounded answers</p>
+    </div>
+  </div>
+
+  <div style="margin-top:14px;display:flex;gap:10px">
+    <div class="card" style="flex:1;padding:10px 14px">
+      <span class="muted">Existing baselines: </span>
+      <span style="font-size:0.78em">Evaluate retrieval <em>or</em> generation — rarely both together with failure analysis</span>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 3 — WHAT WE BUILT
+══════════════════════════════════════════════ -->
+<section data-background-color="#080818">
+  <div class="slide-header">
+    <h2>What We Built</h2>
+    <p class="muted">A unified, end-to-end benchmark — retrieval through faithfulness, all in one pipeline</p>
+  </div>
+
+  <div class="card-grid card-grid-3" style="margin-bottom:14px">
+    <div class="card" style="border-top:3px solid var(--blue)">
+      <h3 style="color:var(--blue)">📊 Benchmark Suite</h3>
+      <ul style="margin:8px 0">
+        <li style="font-size:0.7em">2 datasets (HotpotQA, RAMDocs)</li>
+        <li style="font-size:0.7em">5 retrieval methods</li>
+        <li style="font-size:0.7em">3 LLM backends</li>
+        <li style="font-size:0.7em">400+ test queries</li>
+      </ul>
+    </div>
+    <div class="card" style="border-top:3px solid var(--purple)">
+      <h3 style="color:var(--purple)">⚙️ Production Pipeline</h3>
+      <ul style="margin:8px 0">
+        <li style="font-size:0.7em">Retrieval → Reranking</li>
+        <li style="font-size:0.7em">Multi-agent debate</li>
+        <li style="font-size:0.7em">Rule-based + LLM generation</li>
+        <li style="font-size:0.7em">Faithfulness checking</li>
+      </ul>
+    </div>
+    <div class="card" style="border-top:3px solid var(--green)">
+      <h3 style="color:var(--green)">🔍 Failure Analysis</h3>
+      <ul style="margin:8px 0">
+        <li style="font-size:0.7em">Retrieval vs generation failures</li>
+        <li style="font-size:0.7em">Hallucination detection</li>
+        <li style="font-size:0.7em">Misinformation suppression</li>
+        <li style="font-size:0.7em">Joint F1 tracking</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="two-col" style="gap:14px">
+    <div>
+      <h3 style="color:var(--gold);margin-bottom:8px">Datasets</h3>
+      <div class="card" style="margin-bottom:8px;padding:10px 14px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:0.8em;font-weight:700">HotpotQA</span>
+          <span style="font-size:0.65em;color:var(--muted)">multi-hop reasoning</span>
+        </div>
+        <p style="font-size:0.68em;color:var(--muted);margin:4px 0 0">10 candidate docs/query · 200 test examples · bridge-entity questions</p>
+      </div>
+      <div class="card" style="padding:10px 14px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:0.8em;font-weight:700">RAMDocs</span>
+          <span style="font-size:0.65em;color:var(--muted)">adversarial misinformation</span>
+        </div>
+        <p style="font-size:0.68em;color:var(--muted);margin:4px 0 0">Gold / Misinfo / Noise docs · 200 test examples · ambiguous entities</p>
+      </div>
+    </div>
+    <div>
+      <h3 style="color:var(--gold);margin-bottom:8px">Metrics Tracked</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        <span class="card" style="font-size:0.68em;padding:5px 10px">Recall@K</span>
+        <span class="card" style="font-size:0.68em;padding:5px 10px">MRR</span>
+        <span class="card" style="font-size:0.68em;padding:5px 10px">Multi-doc Hit Rate</span>
+        <span class="card" style="font-size:0.68em;padding:5px 10px">Answer EM</span>
+        <span class="card" style="font-size:0.68em;padding:5px 10px">Answer F1</span>
+        <span class="card" style="font-size:0.68em;padding:5px 10px">Joint F1</span>
+        <span class="card" style="font-size:0.68em;padding:5px 10px">Faithfulness Score</span>
+        <span class="card" style="font-size:0.68em;padding:5px 10px">Hallucination Rate</span>
+        <span class="card" style="font-size:0.68em;padding:5px 10px">Failure Mode</span>
+        <span class="card" style="font-size:0.68em;padding:5px 10px">Misinfo Suppressed</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 4 — RESEARCH FOUNDATION
+══════════════════════════════════════════════ -->
+<section data-background-color="#080818">
+  <div class="slide-header">
+    <h2>Research Foundation</h2>
+    <p class="muted">Each pipeline component is directly grounded in a peer-reviewed paper</p>
+  </div>
+
+  <div class="card-grid card-grid-5" style="margin-bottom:12px">
+    <div class="paper-card blue">
+      <div class="title">RAG</div>
+      <div class="contrib">Lewis et al., 2020</div>
+      <div class="contrib" style="margin-top:6px;color:var(--text)">Retrieval-Augmented Generation — the foundational pattern</div>
+      <span class="tag" style="background:rgba(79,195,247,0.15);color:var(--blue)">Architecture</span>
+    </div>
+    <div class="paper-card purple">
+      <div class="title">RankRAG</div>
+      <div class="contrib">Yu et al., 2024</div>
+      <div class="contrib" style="margin-top:6px;color:var(--text)">LLM as pointwise reranker — score each doc independently</div>
+      <span class="tag" style="background:rgba(206,147,216,0.15);color:var(--purple)">Reranking</span>
+    </div>
+    <div class="paper-card green">
+      <div class="title">Self-RAG</div>
+      <div class="contrib">Asai et al., 2023</div>
+      <div class="contrib" style="margin-top:6px;color:var(--text)">Iterative retrieval with reflection tokens for adaptive queries</div>
+      <span class="tag" style="background:rgba(105,240,174,0.15);color:var(--green)">Retrieval</span>
+    </div>
+    <div class="paper-card orange">
+      <div class="title">MADAM-RAG</div>
+      <div class="contrib">Yoran et al., 2024</div>
+      <div class="contrib" style="margin-top:6px;color:var(--text)">Multi-agent debate — one agent per doc, arbitrator decides</div>
+      <span class="tag" style="background:rgba(255,171,64,0.15);color:var(--orange)">Debate</span>
+    </div>
+    <div class="paper-card teal">
+      <div class="title">RAGChecker</div>
+      <div class="contrib">Ru et al., 2024</div>
+      <div class="contrib" style="margin-top:6px;color:var(--text)">Claim-level faithfulness checking + failure mode taxonomy</div>
+      <span class="tag" style="background:rgba(77,208,225,0.15);color:var(--teal)">Eval</span>
+    </div>
+  </div>
+
+  <div class="card" style="padding:12px 16px">
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+      <span style="font-size:0.72em;color:var(--muted)">Paper → Component mapping:</span>
+      <span style="font-size:0.7em"><span class="blue">RAG</span> → base scaffold</span>
+      <span style="font-size:0.7em"><span class="green">Self-RAG</span> → iterative retrieval logic</span>
+      <span style="font-size:0.7em"><span class="purple">RankRAG</span> → LLM reranker</span>
+      <span style="font-size:0.7em"><span class="orange">MADAM-RAG</span> → debate + misinfo suppression</span>
+      <span style="font-size:0.7em"><span class="teal">RAGChecker</span> → faithfulness + failure taxonomy</span>
+    </div>
+  </div>
+
+  <div class="card-grid card-grid-2" style="margin-top:12px">
+    <div class="card" style="padding:10px 14px">
+      <span style="font-size:0.72em;color:var(--muted)">Novel contribution: </span>
+      <span style="font-size:0.72em">All 5 papers integrated into a <span class="accent">single runnable pipeline</span> with shared schema and unified metrics</span>
+    </div>
+    <div class="card" style="padding:10px 14px">
+      <span style="font-size:0.72em;color:var(--muted)">Circuit breaker: </span>
+      <span style="font-size:0.72em">Every LLM call has a deterministic fallback — pipeline never stops, degrades gracefully</span>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 5 — PIPELINE ARCHITECTURE
+══════════════════════════════════════════════ -->
+<section data-background-color="#080818">
+  <div class="slide-header" style="margin-bottom:10px">
+    <h2>System Architecture</h2>
+    <p class="muted">9-step pipeline from raw question to verified answer</p>
+  </div>
+
+  <!-- Pipeline SVG -->
+  <svg viewBox="0 0 920 310" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-height:260px">
+    <defs>
+      <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#4a4a6a"/>
+      </marker>
+      <filter id="glow">
+        <feGaussianBlur stdDeviation="2" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+
+    <!-- Phase labels (top) -->
+    <text x="46" y="18" fill="#4fc3f7" font-size="9" font-family="Segoe UI,sans-serif" text-anchor="middle" opacity="0.7">INPUT</text>
+    <text x="200" y="18" fill="#818cf8" font-size="9" font-family="Segoe UI,sans-serif" text-anchor="middle" opacity="0.7">RETRIEVAL</text>
+    <text x="370" y="18" fill="#ce93d8" font-size="9" font-family="Segoe UI,sans-serif" text-anchor="middle" opacity="0.7">RERANKING</text>
+    <text x="530" y="18" fill="#ffab40" font-size="9" font-family="Segoe UI,sans-serif" text-anchor="middle" opacity="0.7">DEBATE</text>
+    <text x="690" y="18" fill="#69f0ae" font-size="9" font-family="Segoe UI,sans-serif" text-anchor="middle" opacity="0.7">GENERATION</text>
+    <text x="845" y="18" fill="#4dd0e1" font-size="9" font-family="Segoe UI,sans-serif" text-anchor="middle" opacity="0.7">FAITHFULNESS</text>
+
+    <!-- ─── ROW 1: main flow ─── -->
+    <!-- Query -->
+    <rect x="4" y="28" width="82" height="50" rx="8" fill="#0d1b3e" stroke="#4fc3f7" stroke-width="1.5"/>
+    <text x="45" y="50" fill="#4fc3f7" font-size="10" font-family="Segoe UI,sans-serif" text-anchor="middle" font-weight="700">Question</text>
+    <text x="45" y="64" fill="#8888aa" font-size="8" font-family="Segoe UI,sans-serif" text-anchor="middle">+ corpus</text>
+
+    <!-- Arrow -->
+    <line x1="86" y1="53" x2="110" y2="53" stroke="#4a4a6a" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <!-- Retrieval block -->
+    <rect x="112" y="28" width="174" height="50" rx="8" fill="#0d0d2e" stroke="#818cf8" stroke-width="1.5"/>
+    <text x="199" y="46" fill="#818cf8" font-size="10" font-family="Segoe UI,sans-serif" text-anchor="middle" font-weight="700">Retrieval</text>
+    <text x="150" y="62" fill="#ccccee" font-size="8" font-family="Segoe UI,sans-serif" text-anchor="middle">BM25</text>
+    <text x="199" y="62" fill="#ccccee" font-size="8" font-family="Segoe UI,sans-serif" text-anchor="middle">Hybrid</text>
+    <text x="252" y="62" fill="#ccccee" font-size="8" font-family="Segoe UI,sans-serif" text-anchor="middle">Iterative</text>
+
+    <!-- Arrow -->
+    <line x1="286" y1="53" x2="308" y2="53" stroke="#4a4a6a" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <!-- Reranker -->
+    <rect x="310" y="28" width="118" height="50" rx="8" fill="#1a0a2e" stroke="#ce93d8" stroke-width="1.5"/>
+    <text x="369" y="46" fill="#ce93d8" font-size="10" font-family="Segoe UI,sans-serif" text-anchor="middle" font-weight="700">LLM Reranker</text>
+    <text x="369" y="62" fill="#8888aa" font-size="8" font-family="Segoe UI,sans-serif" text-anchor="middle">RankRAG-style scoring</text>
+
+    <!-- Arrow -->
+    <line x1="428" y1="53" x2="450" y2="53" stroke="#4a4a6a" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <!-- Debate -->
+    <rect x="452" y="28" width="154" height="50" rx="8" fill="#1e1000" stroke="#ffab40" stroke-width="1.5"/>
+    <text x="529" y="46" fill="#ffab40" font-size="10" font-family="Segoe UI,sans-serif" text-anchor="middle" font-weight="700">Multi-Agent Debate</text>
+    <text x="529" y="62" fill="#8888aa" font-size="8" font-family="Segoe UI,sans-serif" text-anchor="middle">N agents + Arbitrator (MADAM-RAG)</text>
+
+    <!-- Arrow -->
+    <line x1="606" y1="53" x2="628" y2="53" stroke="#4a4a6a" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <!-- Answer Extraction -->
+    <rect x="630" y="28" width="118" height="50" rx="8" fill="#001a10" stroke="#69f0ae" stroke-width="1.5"/>
+    <text x="689" y="46" fill="#69f0ae" font-size="10" font-family="Segoe UI,sans-serif" text-anchor="middle" font-weight="700">Answer Extract</text>
+    <text x="689" y="62" fill="#8888aa" font-size="8" font-family="Segoe UI,sans-serif" text-anchor="middle">Rule-based / LLM</text>
+
+    <!-- Arrow -->
+    <line x1="748" y1="53" x2="770" y2="53" stroke="#4a4a6a" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <!-- Faithfulness -->
+    <rect x="772" y="28" width="144" height="50" rx="8" fill="#001418" stroke="#4dd0e1" stroke-width="1.5"/>
+    <text x="844" y="46" fill="#4dd0e1" font-size="10" font-family="Segoe UI,sans-serif" text-anchor="middle" font-weight="700">Faithfulness Check</text>
+    <text x="844" y="62" fill="#8888aa" font-size="8" font-family="Segoe UI,sans-serif" text-anchor="middle">LLM judge / deterministic</text>
+
+    <!-- ─── ROW 2: detail boxes ─── -->
+
+    <!-- Retrieval detail -->
+    <rect x="112" y="100" width="174" height="72" rx="6" fill="rgba(129,140,248,0.06)" stroke="rgba(129,140,248,0.2)" stroke-width="1"/>
+    <text x="120" y="116" fill="#9090b0" font-size="7.5" font-family="Segoe UI,sans-serif">▸ BM25: TF-IDF sparse matching</text>
+    <text x="120" y="130" fill="#9090b0" font-size="7.5" font-family="Segoe UI,sans-serif">▸ Hybrid: BM25 + dense embeddings</text>
+    <text x="120" y="144" fill="#9090b0" font-size="7.5" font-family="Segoe UI,sans-serif">▸ Iterative: 2-pass + bridge entities</text>
+    <text x="120" y="158" fill="#9090b0" font-size="7.5" font-family="Segoe UI,sans-serif">▸ Top-K docs → reranker input</text>
+
+    <!-- Reranker detail -->
+    <rect x="310" y="100" width="118" height="72" rx="6" fill="rgba(206,147,216,0.06)" stroke="rgba(206,147,216,0.2)" stroke-width="1"/>
+    <text x="318" y="116" fill="#9090b0" font-size="7.5" font-family="Segoe UI,sans-serif">▸ Score each doc 1-10</text>
+    <text x="318" y="130" fill="#9090b0" font-size="7.5" font-family="Segoe UI,sans-serif">▸ "Is this doc relevant?"</text>
+    <text x="318" y="144" fill="#9090b0" font-size="7.5" font-family="Segoe UI,sans-serif">▸ Re-rank by LLM score</text>
+    <text x="318" y="158" fill="#9090b0" font-size="7.5" font-family="Segoe UI,sans-serif">▸ Fallback: BM25 order</text>
+
+    <!-- Debate detail -->
+    <rect x="452" y="100" width="154" height="72" rx="6" fill="rgba(255,171,64,0.06)" stroke="rgba(255,171,64,0.2)" stroke-width="1"/>
+    <text x="460" y="116" fill="#9090b0" font-size="7.5" font-family="Segoe UI,sans-serif">▸ 1 agent per retrieved doc</text>
+    <text x="460" y="130" fill="#9090b0" font-size="7.5" font-family="Segoe UI,sans-serif">▸ Local answer + confidence</text>
+    <text x="460" y="144" fill="#9090b0" font-size="7.5" font-family="Segoe UI,sans-serif">▸ Misinfo labels → weights</text>
+    <text x="460" y="158" fill="#9090b0" font-size="7.5" font-family="Segoe UI,sans-serif">▸ Arbitrator picks winner</text>
+
+    <!-- Generation detail -->
+    <rect x="630" y="100" width="118" height="72" rx="6" fill="rgba(105,240,174,0.06)" stroke="rgba(105,240,174,0.2)" stroke-width="1"/>
+    <text x="638" y="116" fill="#9090b0" font-size="7.5" font-family="Segoe UI,sans-serif">▸ Rule-based: regex / match</text>
+    <text x="638" y="130" fill="#9090b0" font-size="7.5" font-family="Segoe UI,sans-serif">▸ LLM: full debate synthesis</text>
+    <text x="638" y="144" fill="#9090b0" font-size="7.5" font-family="Segoe UI,sans-serif">▸ Fallback: heuristic winner</text>
+    <text x="638" y="158" fill="#9090b0" font-size="7.5" font-family="Segoe UI,sans-serif">▸ EM + F1 evaluation</text>
+
+    <!-- Faithfulness detail -->
+    <rect x="772" y="100" width="144" height="72" rx="6" fill="rgba(77,208,225,0.06)" stroke="rgba(77,208,225,0.2)" stroke-width="1"/>
+    <text x="780" y="116" fill="#9090b0" font-size="7.5" font-family="Segoe UI,sans-serif">▸ Is answer grounded in docs?</text>
+    <text x="780" y="130" fill="#9090b0" font-size="7.5" font-family="Segoe UI,sans-serif">▸ Detect hallucinated claims</text>
+    <text x="780" y="144" fill="#9090b0" font-size="7.5" font-family="Segoe UI,sans-serif">▸ Classify: correct /</text>
+    <text x="780" y="158" fill="#9090b0" font-size="7.5" font-family="Segoe UI,sans-serif">   retrieval_fail / gen_fail</text>
+
+    <!-- Vertical connectors (main boxes to detail) -->
+    <line x1="199" y1="78" x2="199" y2="100" stroke="rgba(129,140,248,0.3)" stroke-width="1" stroke-dasharray="3,2"/>
+    <line x1="369" y1="78" x2="369" y2="100" stroke="rgba(206,147,216,0.3)" stroke-width="1" stroke-dasharray="3,2"/>
+    <line x1="529" y1="78" x2="529" y2="100" stroke="rgba(255,171,64,0.3)" stroke-width="1" stroke-dasharray="3,2"/>
+    <line x1="689" y1="78" x2="689" y2="100" stroke="rgba(105,240,174,0.3)" stroke-width="1" stroke-dasharray="3,2"/>
+    <line x1="844" y1="78" x2="844" y2="100" stroke="rgba(77,208,225,0.3)" stroke-width="1" stroke-dasharray="3,2"/>
+
+    <!-- ─── ROW 3: datasets ─── -->
+    <rect x="4" y="195" width="82" height="42" rx="6" fill="rgba(79,195,247,0.07)" stroke="rgba(79,195,247,0.25)" stroke-width="1"/>
+    <text x="45" y="213" fill="#6688aa" font-size="8" font-family="Segoe UI,sans-serif" text-anchor="middle" font-weight="600">HotpotQA</text>
+    <text x="45" y="227" fill="#555575" font-size="7" font-family="Segoe UI,sans-serif" text-anchor="middle">multi-hop</text>
+
+    <rect x="4" y="246" width="82" height="42" rx="6" fill="rgba(255,171,64,0.07)" stroke="rgba(255,171,64,0.25)" stroke-width="1"/>
+    <text x="45" y="264" fill="#886644" font-size="8" font-family="Segoe UI,sans-serif" text-anchor="middle" font-weight="600">RAMDocs</text>
+    <text x="45" y="278" fill="#555575" font-size="7" font-family="Segoe UI,sans-serif" text-anchor="middle">misinfo</text>
+
+    <!-- Final answer box -->
+    <rect x="772" y="195" width="144" height="60" rx="8" fill="rgba(255,213,79,0.1)" stroke="#ffd54f" stroke-width="2"/>
+    <text x="844" y="221" fill="#ffd54f" font-size="11" font-family="Segoe UI,sans-serif" text-anchor="middle" font-weight="700">Final Answer</text>
+    <text x="844" y="237" fill="#8888aa" font-size="8" font-family="Segoe UI,sans-serif" text-anchor="middle">+ failure mode + evidence</text>
+
+    <!-- QueryTrace box -->
+    <rect x="310" y="210" width="440" height="30" rx="6" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.1)" stroke-width="1" stroke-dasharray="4,3"/>
+    <text x="530" y="230" fill="#555575" font-size="8" font-family="Segoe UI,sans-serif" text-anchor="middle">QueryTrace — unified schema capturing every intermediate result</text>
+  </svg>
+</section>
+
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 6 — RETRIEVAL METHODS
+══════════════════════════════════════════════ -->
+<section data-background-color="#080818">
+  <div class="slide-header">
+    <h2>Three Retrieval Strategies</h2>
+    <p class="muted">Progressive complexity — each addresses a limitation of the previous</p>
+  </div>
+
+  <div class="retrieval-grid">
+    <div class="method-card" style="border-top:3px solid #818cf8">
+      <span class="badge" style="background:rgba(129,140,248,0.15);color:#818cf8">Baseline</span>
+      <h3>BM25</h3>
+      <p>Sparse keyword matching using TF-IDF weights. Fast, interpretable, strong baseline.</p>
+      <div class="step">① Tokenize query</div>
+      <div class="step">② Score docs by term overlap</div>
+      <div class="step">③ Return Top-K by BM25 score</div>
+      <div style="margin-top:10px;padding:6px 10px;background:rgba(129,140,248,0.08);border-radius:6px">
+        <span style="font-size:0.65em;color:var(--muted)">Limitation: </span>
+        <span style="font-size:0.65em">misses semantic synonyms</span>
+      </div>
+    </div>
+
+    <div class="method-card" style="border-top:3px solid var(--blue)">
+      <span class="badge" style="background:rgba(79,195,247,0.15);color:var(--blue)">Improved</span>
+      <h3>Hybrid (BM25 + Dense)</h3>
+      <p>Fuses sparse BM25 with dense semantic embeddings via Reciprocal Rank Fusion.</p>
+      <div class="step">① BM25 score (sparse)</div>
+      <div class="step">② Sentence-transformer embeddings</div>
+      <div class="step">③ RRF fusion → re-ranked list</div>
+      <div style="margin-top:10px;padding:6px 10px;background:rgba(79,195,247,0.08);border-radius:6px">
+        <span style="font-size:0.65em;color:var(--muted)">Gain: </span>
+        <span style="font-size:0.65em">captures paraphrases + semantic similarity</span>
+      </div>
+    </div>
+
+    <div class="method-card" style="border-top:3px solid var(--green)">
+      <span class="badge" style="background:rgba(105,240,174,0.15);color:var(--green)">Best</span>
+      <h3>Iterative Hybrid</h3>
+      <p>Two-pass retrieval inspired by Self-RAG: first pass extracts bridge entities for second query.</p>
+      <div class="step">① Pass 1: Hybrid on original question</div>
+      <div class="step">② Extract bridge entities from results</div>
+      <div class="step">③ Pass 2: Hybrid on augmented query</div>
+      <div class="step">④ Merge both result sets</div>
+      <div style="margin-top:10px;padding:6px 10px;background:rgba(105,240,174,0.08);border-radius:6px">
+        <span style="font-size:0.65em;color:var(--muted)">Gain: </span>
+        <span style="font-size:0.65em">finds both docs in multi-hop chains</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="example-box" style="margin-top:14px">
+    <div class="label">Iterative Hybrid — multi-hop example</div>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:0.72em;color:var(--gold)">"What nationality is the Spectre director?"</span>
+      <span style="color:var(--muted)">→</span>
+      <span style="font-size:0.72em">Pass 1 retrieves <span class="blue">Spectre article</span></span>
+      <span style="color:var(--muted)">→</span>
+      <span style="font-size:0.72em">Extracts bridge entity <span class="purple">"Sam Mendes"</span></span>
+      <span style="color:var(--muted)">→</span>
+      <span style="font-size:0.72em">Pass 2 retrieves <span class="purple">Sam Mendes bio</span></span>
+      <span style="color:var(--muted)">→</span>
+      <span style="font-size:0.72em;color:var(--green)">Both gold docs found ✓</span>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 7 — RERANKING + MULTI-AGENT DEBATE
+══════════════════════════════════════════════ -->
+<section data-background-color="#080818">
+  <div class="slide-header">
+    <h2>Reranking &amp; Multi-Agent Debate</h2>
+    <p class="muted">RankRAG-style LLM scoring feeds directly into MADAM-RAG debate</p>
+  </div>
+
+  <div class="two-col">
+    <!-- Left: Reranking -->
+    <div>
+      <h3 style="color:var(--purple);margin-bottom:10px">① LLM Reranker <span class="muted" style="font-weight:400;font-size:0.8em">(RankRAG)</span></h3>
+      <div class="card" style="padding:12px;margin-bottom:8px">
+        <p style="margin:0 0 6px;font-size:0.75em">For each retrieved document, the LLM is asked:</p>
+        <div style="background:rgba(0,0,0,0.3);border-radius:6px;padding:8px 12px;font-size:0.68em;font-family:monospace;color:#ccccdd">
+          "On a scale 1–10, how relevant is<br/>
+          this document to the question?"
+        </div>
+        <ul style="margin-top:8px">
+          <li style="font-size:0.7em">Assigns relevance score per doc</li>
+          <li style="font-size:0.7em">Re-orders before debate</li>
+          <li style="font-size:0.7em">Deterministic fallback: original order</li>
+        </ul>
+      </div>
+      <div class="card" style="padding:10px 14px;background:rgba(206,147,216,0.05)">
+        <span style="font-size:0.7em;color:var(--muted)">Impact: </span>
+        <span style="font-size:0.7em">EM jumps from <span class="orange">0.595 → 0.74</span> with BM25 + LLM reranker</span>
+      </div>
+    </div>
+
+    <!-- Right: Debate -->
+    <div>
+      <h3 style="color:var(--orange);margin-bottom:10px">② Multi-Agent Debate <span class="muted" style="font-weight:400;font-size:0.8em">(MADAM-RAG)</span></h3>
+      <div class="agent-row" style="gap:6px;justify-content:flex-start;margin-bottom:6px">
+        <div class="agent-box" style="font-size:0.65em;padding:6px 10px">
+          Agent₁<br/><span style="color:var(--muted)">gold doc</span>
+        </div>
+        <div class="agent-box" style="font-size:0.65em;padding:6px 10px">
+          Agent₂<br/><span style="color:var(--red)">misinfo doc</span>
+        </div>
+        <div class="agent-box" style="font-size:0.65em;padding:6px 10px">
+          Agent₃<br/><span style="color:var(--muted)">noise doc</span>
+        </div>
+        <div class="agent-box" style="font-size:0.65em;padding:6px 10px">
+          Agent₄<br/><span style="color:var(--muted)">gold doc</span>
+        </div>
+      </div>
+      <div class="arrow-down" style="font-size:0.9em;text-align:left;margin-left:40px">↓ weighted votes</div>
+      <div class="arbiter-box" style="display:inline-block;margin-bottom:8px;font-size:0.72em">
+        ⚖️ Arbitrator — final answer
+      </div>
+      <div class="card" style="padding:10px 14px;background:rgba(255,171,64,0.05)">
+        <div style="font-size:0.68em">
+          <span style="color:var(--muted)">Label weights: </span>
+          <span class="green">gold → ×2.0</span> ·
+          <span class="red">misinfo → ×−1.5</span> ·
+          <span class="muted">noise → ×−0.5</span>
+        </div>
+        <div style="font-size:0.68em;margin-top:4px">
+          <span style="color:var(--muted)">Misinfo suppressed: </span>
+          <span class="green bold">96.5%</span> on RAMDocs
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 8 — FAITHFULNESS CHECKING
+══════════════════════════════════════════════ -->
+<section data-background-color="#080818">
+  <div class="slide-header">
+    <h2>Faithfulness &amp; Failure Analysis</h2>
+    <p class="muted">RAGChecker-style evaluation — two paths, always produces a classification</p>
+  </div>
+
+  <div class="two-col" style="gap:16px">
+    <!-- LLM path -->
+    <div>
+      <h3 style="color:var(--teal);margin-bottom:10px">Path A — LLM Judge <span class="muted" style="font-size:0.8em;font-weight:400">(when available)</span></h3>
+      <div class="card" style="margin-bottom:8px;padding:12px">
+        <p style="font-size:0.72em;margin:0 0 8px">LLM receives: question · predicted answer · gold answer · retrieved docs</p>
+        <p style="font-size:0.72em;margin:0 0 6px">Returns JSON:</p>
+        <div style="background:rgba(0,0,0,0.3);border-radius:6px;padding:8px 12px;font-size:0.65em;font-family:monospace;color:#aaddcc">
+          {<br/>
+          &nbsp; "faithfulness_score": 7,<br/>
+          &nbsp; "hallucinated_claims": ["..."],<br/>
+          &nbsp; "failure_mode": "generation_failure"<br/>
+          }
+        </div>
+      </div>
+      <div style="font-size:0.7em;color:var(--muted)">Score 0–10 → normalised to 0.0–1.0</div>
+    </div>
+
+    <!-- Deterministic path -->
+    <div>
+      <h3 style="color:var(--gold);margin-bottom:10px">Path B — Deterministic <span class="muted" style="font-size:0.8em;font-weight:400">(always runs)</span></h3>
+      <div class="card" style="padding:12px;margin-bottom:8px">
+        <div style="font-size:0.72em;margin-bottom:8px">Pure logic, no LLM call needed:</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="background:rgba(105,240,174,0.15);border:1px solid var(--green);border-radius:5px;padding:3px 8px;font-size:0.65em;color:var(--green)">EM = 1</span>
+            <span style="font-size:0.7em;color:var(--muted)">→</span>
+            <span style="font-size:0.7em" class="green">correct</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="background:rgba(255,171,64,0.15);border:1px solid var(--orange);border-radius:5px;padding:3px 8px;font-size:0.65em;color:var(--orange)">EM=0, gold docs retrieved</span>
+            <span style="font-size:0.7em;color:var(--muted)">→</span>
+            <span style="font-size:0.7em" class="orange">generation_failure</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="background:rgba(239,83,80,0.15);border:1px solid var(--red);border-radius:5px;padding:3px 8px;font-size:0.65em;color:var(--red)">EM=0, gold docs missing</span>
+            <span style="font-size:0.7em;color:var(--muted)">→</span>
+            <span style="font-size:0.7em" class="red">retrieval_failure</span>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="padding:10px 14px;background:rgba(255,213,79,0.04)">
+        <span style="font-size:0.7em;color:var(--muted)">Circuit breaker: </span>
+        <span style="font-size:0.7em">if LLM returns "unknown" → deterministic result used</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="fm-grid" style="margin-top:14px">
+    <div class="fm-card" style="border-top:3px solid var(--red)">
+      <div class="pct red">~90%</div>
+      <div class="lbl">of all failures are<br/><span style="color:var(--red)">retrieval failures</span></div>
+    </div>
+    <div class="fm-card" style="border-top:3px solid var(--orange)">
+      <div class="pct orange">~10%</div>
+      <div class="lbl">of all failures are<br/><span style="color:var(--orange)">generation failures</span></div>
+    </div>
+    <div class="fm-card" style="border-top:3px solid var(--green)">
+      <div class="pct green">9:1</div>
+      <div class="lbl"><span style="color:var(--green)">retrieval : generation</span><br/>failure ratio</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 9 — EXPERIMENTS
+══════════════════════════════════════════════ -->
+<section data-background-color="#080818">
+  <div class="slide-header">
+    <h2>Experimental Setup</h2>
+    <p class="muted">Four experimental runs — each isolating a different pipeline stage</p>
+  </div>
+
+  <table class="metric-table">
+    <thead>
+      <tr>
+        <th>Run</th>
+        <th>Retrieval</th>
+        <th>Reranker</th>
+        <th>Generation</th>
+        <th>Faithfulness</th>
+        <th>Purpose</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span style="color:var(--muted)">Baseline</span></td>
+        <td>BM25 / Hybrid</td>
+        <td>None</td>
+        <td>Rule-based</td>
+        <td>Deterministic</td>
+        <td>No-reranker floor</td>
+      </tr>
+      <tr>
+        <td><span style="color:var(--purple)">LLM Rerank</span></td>
+        <td>BM25 / Hybrid / Iterative</td>
+        <td>Groq 8B</td>
+        <td>Rule-based</td>
+        <td>Deterministic</td>
+        <td>Reranker impact</td>
+      </tr>
+      <tr class="highlight">
+        <td><span style="color:var(--green)">Haiku Best ★</span></td>
+        <td>BM25</td>
+        <td>Haiku</td>
+        <td>Rule-based</td>
+        <td>LLM judge</td>
+        <td>Best-quality LLM</td>
+      </tr>
+      <tr>
+        <td><span style="color:var(--orange)">LLM Generation</span></td>
+        <td>Hybrid / Iterative</td>
+        <td>Groq 8B</td>
+        <td>LLM debate</td>
+        <td>LLM judge</td>
+        <td>Full LLM pipeline</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="card-grid card-grid-3" style="margin-top:14px">
+    <div class="card" style="padding:10px 14px">
+      <div style="font-size:0.65em;color:var(--muted);margin-bottom:4px">LLM Backends Compared</div>
+      <div style="font-size:0.75em"><span class="muted">Local:</span> Ollama Llama 3.2 3B</div>
+      <div style="font-size:0.75em"><span class="muted">Free cloud:</span> Groq Llama 8B</div>
+      <div style="font-size:0.75em"><span class="muted">Paid:</span> Anthropic Claude Haiku</div>
+    </div>
+    <div class="card" style="padding:10px 14px">
+      <div style="font-size:0.65em;color:var(--muted);margin-bottom:4px">Scale</div>
+      <div style="font-size:0.75em">200 queries × HotpotQA</div>
+      <div style="font-size:0.75em">200 queries × RAMDocs</div>
+      <div style="font-size:0.75em">~3,000+ LLM calls per run</div>
+    </div>
+    <div class="card" style="padding:10px 14px">
+      <div style="font-size:0.65em;color:var(--muted);margin-bottom:4px">K values</div>
+      <div style="font-size:0.75em">Recall@2, @3, @5, @10</div>
+      <div style="font-size:0.75em">Multi-doc hit rate @K</div>
+      <div style="font-size:0.75em">MRR (mean reciprocal rank)</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 10 — RESULTS: RETRIEVAL QUALITY
+══════════════════════════════════════════════ -->
+<section data-background-color="#080818">
+  <div class="slide-header">
+    <h2>Results — Retrieval Quality</h2>
+    <p class="muted">HotpotQA · LLM Rerank run · higher = better</p>
+  </div>
+
+  <div class="two-col">
+    <!-- Left: table -->
+    <div>
+      <table class="metric-table">
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Recall@5</th>
+            <th>MRR</th>
+            <th>Multi-doc HR</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>BM25 (baseline)</td>
+            <td>0.650</td>
+            <td>0.850</td>
+            <td>0.245</td>
+          </tr>
+          <tr>
+            <td>BM25 + Rerank</td>
+            <td class="good">0.750</td>
+            <td class="good">0.875</td>
+            <td class="good">0.385</td>
+          </tr>
+          <tr>
+            <td>Hybrid + Rerank</td>
+            <td>0.768</td>
+            <td>0.926</td>
+            <td>0.425</td>
+          </tr>
+          <tr class="highlight">
+            <td>Iterative Hybrid ★</td>
+            <td class="best">0.770</td>
+            <td class="best">0.926</td>
+            <td class="best">0.435</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="margin-top:10px;font-size:0.7em;color:var(--muted)">
+        LLM reranker alone: +10% Recall@5 over baseline BM25
+      </div>
+    </div>
+
+    <!-- Right: bar chart Recall@5 -->
+    <div>
+      <div style="font-size:0.72em;color:var(--muted);margin-bottom:8px">Recall@5 comparison</div>
+      <div class="bar-chart">
+        <div class="bar-row">
+          <div class="bar-label">BM25 baseline</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:84.4%;background:linear-gradient(90deg,#555580,#7777aa)">0.650</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">BM25 + Rerank</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:97.4%;background:linear-gradient(90deg,#4040b0,#6060cc)">0.750</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Hybrid + Rerank</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:99.7%;background:linear-gradient(90deg,#2288cc,#44aaee)">0.768</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label" style="color:var(--green)">Iterative Hybrid ★</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:100%;background:linear-gradient(90deg,#00aa66,#69f0ae)">0.770</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;font-size:0.72em;color:var(--muted)">MRR improvement</div>
+      <div class="bar-chart">
+        <div class="bar-row">
+          <div class="bar-label">Baseline BM25</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:91.8%;background:linear-gradient(90deg,#555580,#7777aa)">0.850</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label" style="color:var(--green)">Iterative Hybrid ★</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:100%;background:linear-gradient(90deg,#00aa66,#69f0ae)">0.926</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 11 — RESULTS: ANSWER QUALITY
+══════════════════════════════════════════════ -->
+<section data-background-color="#080818">
+  <div class="slide-header">
+    <h2>Results — Answer Quality</h2>
+    <p class="muted">HotpotQA Exact Match across pipeline configurations</p>
+  </div>
+
+  <div class="two-col-6040">
+    <div>
+      <table class="metric-table">
+        <thead>
+          <tr>
+            <th>Configuration</th>
+            <th>EM (HotpotQA)</th>
+            <th>Answer F1</th>
+            <th>Halluc. Rate</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span style="color:var(--muted)">Baseline (BM25)</span></td>
+            <td>0.595</td>
+            <td>0.602</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>BM25 + LLM Rerank</td>
+            <td class="good">0.740</td>
+            <td class="good">0.745</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Hybrid + LLM Rerank</td>
+            <td>0.710</td>
+            <td>0.716</td>
+            <td>—</td>
+          </tr>
+          <tr class="highlight">
+            <td>Haiku + BM25 (best) ★</td>
+            <td class="best">0.800</td>
+            <td class="best">0.800</td>
+            <td class="best">0%</td>
+          </tr>
+          <tr>
+            <td><span style="color:var(--orange)">LLM Gen · BM25</span></td>
+            <td style="color:var(--red)">0.220</td>
+            <td style="color:var(--red)">0.359</td>
+            <td style="color:var(--red)">36%</td>
+          </tr>
+          <tr>
+            <td><span style="color:var(--orange)">LLM Gen · Hybrid</span></td>
+            <td style="color:var(--red)">0.180</td>
+            <td style="color:var(--red)">0.347</td>
+            <td style="color:var(--red)">28%</td>
+          </tr>
+          <tr>
+            <td><span style="color:var(--orange)">LLM Gen · Iterative</span></td>
+            <td style="color:var(--orange)">0.260</td>
+            <td style="color:var(--orange)">0.422</td>
+            <td style="color:var(--orange)">18%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="margin-top:10px">
+        <div style="display:flex;align-items:center;gap:8px;font-size:0.72em">
+          <span style="background:rgba(105,240,174,0.15);padding:3px 10px;border-radius:4px;color:var(--green)">RAMDocs: all methods ≈ 0.96 EM</span>
+          <span style="color:var(--muted)">Misinfo suppressed 96.5%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- EM bar chart -->
+    <div>
+      <div style="font-size:0.72em;color:var(--muted);margin-bottom:8px">Answer EM — HotpotQA</div>
+      <div class="bar-chart">
+        <div class="bar-row">
+          <div class="bar-label" style="font-size:0.62em">Baseline</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:74.4%;background:#555580">0.595</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label" style="font-size:0.62em">BM25+Rerank</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:92.5%;background:#4466bb">0.740</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label" style="font-size:0.62em;color:var(--green)">Haiku Best ★</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:100%;background:linear-gradient(90deg,#007744,#69f0ae)">0.800</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label" style="font-size:0.62em;color:var(--orange)">LLM Gen·BM25</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:27.5%;background:#884400">0.220</div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label" style="font-size:0.62em;color:var(--orange)">LLM Gen·Iter.</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:32.5%;background:#aa6600">0.260</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px;padding:10px 14px;background:rgba(239,83,80,0.07);border-left:3px solid var(--red)">
+        <div style="font-size:0.72em;font-weight:700;color:var(--red);margin-bottom:3px">Key Surprise</div>
+        <div style="font-size:0.68em">LLM generation EM dropped <span class="red">0.80 → 0.22</span> — LLMs generate <em>correct but unmatched</em> text. Rule-based extraction wins on short factoid answers.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 12 — LLM BACKEND COMPARISON
+══════════════════════════════════════════════ -->
+<section data-background-color="#080818">
+  <div class="slide-header">
+    <h2>LLM Backend Comparison</h2>
+    <p class="muted">Same pipeline, three backends — Ollama 3B · Groq 8B · Claude Haiku</p>
+  </div>
+
+  <table class="metric-table" style="margin-bottom:14px">
+    <thead>
+      <tr>
+        <th>Configuration</th>
+        <th>Backend</th>
+        <th>EM (HotpotQA)</th>
+        <th>Faithfulness</th>
+        <th>Halluc. Rate</th>
+        <th>Cost</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>BM25 + Ollama rerank</td>
+        <td><span style="color:var(--muted)">Llama 3.2 3B · local</span></td>
+        <td>0.650</td>
+        <td>—</td>
+        <td>—</td>
+        <td class="green">Free</td>
+      </tr>
+      <tr>
+        <td>BM25 + Groq rerank</td>
+        <td><span style="color:var(--blue)">Llama 3.1 8B · cloud</span></td>
+        <td>0.740</td>
+        <td>0.482</td>
+        <td>36%</td>
+        <td class="green">Free tier</td>
+      </tr>
+      <tr>
+        <td>Iterative + Groq</td>
+        <td><span style="color:var(--blue)">Llama 3.1 8B · cloud</span></td>
+        <td>0.705</td>
+        <td>0.574</td>
+        <td>18%</td>
+        <td class="green">Free tier</td>
+      </tr>
+      <tr class="highlight">
+        <td>BM25 + Haiku rerank ★</td>
+        <td><span style="color:var(--purple)">Claude Haiku · API</span></td>
+        <td class="best">0.800</td>
+        <td class="best">—</td>
+        <td class="best">0%</td>
+        <td style="color:var(--orange)">Paid</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="card-grid card-grid-3">
+    <div class="card" style="border-top:3px solid var(--muted);padding:12px">
+      <div style="font-size:0.72em;font-weight:700;margin-bottom:4px">🖥️ Ollama 3B</div>
+      <ul style="margin:0">
+        <li style="font-size:0.68em">Runs fully local, no API</li>
+        <li style="font-size:0.68em">Weakest reranking quality</li>
+        <li style="font-size:0.68em">Good for offline/private use</li>
+        <li style="font-size:0.68em">EM: 0.650 (near baseline)</li>
+      </ul>
+    </div>
+    <div class="card" style="border-top:3px solid var(--blue);padding:12px">
+      <div style="font-size:0.72em;font-weight:700;margin-bottom:4px">☁️ Groq 8B</div>
+      <ul style="margin:0">
+        <li style="font-size:0.68em">Free cloud tier (30 RPM)</li>
+        <li style="font-size:0.68em">Strong reranker, good F1</li>
+        <li style="font-size:0.68em">Rate limit → 3.5 hr run</li>
+        <li style="font-size:0.68em">Best faithfulness: 0.574</li>
+      </ul>
+    </div>
+    <div class="card" style="border-top:3px solid var(--purple);padding:12px">
+      <div style="font-size:0.72em;font-weight:700;margin-bottom:4px">✨ Claude Haiku</div>
+      <ul style="margin:0">
+        <li style="font-size:0.68em">Highest answer quality</li>
+        <li style="font-size:0.68em"><span class="green bold">0.800 EM</span> — best overall</li>
+        <li style="font-size:0.68em">0% hallucination (rule-based)</li>
+        <li style="font-size:0.68em">Paid but fast</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 13 — KEY INSIGHTS
+══════════════════════════════════════════════ -->
+<section data-background-color="#080818">
+  <div class="slide-header">
+    <h2>Key Insights</h2>
+    <p class="muted">What the numbers tell us</p>
+  </div>
+
+  <div class="insight-grid">
+    <div class="insight-card" style="border-left:4px solid var(--red)">
+      <div class="num red">9:1</div>
+      <div style="font-size:0.82em;font-weight:600;margin-top:4px">Retrieval dominates failure</div>
+      <div class="desc">90% of wrong answers are due to the right documents <em>not being retrieved</em> — not hallucination. Fix retrieval first.</div>
+    </div>
+    <div class="insight-card" style="border-left:4px solid var(--green)">
+      <div class="num green">+20%</div>
+      <div style="font-size:0.82em;font-weight:600;margin-top:4px">LLM reranker gain</div>
+      <div class="desc">Adding a LLM reranker (Haiku) jumped EM from 0.595 → 0.800 — the single highest-impact component in the pipeline.</div>
+    </div>
+    <div class="insight-card" style="border-left:4px solid var(--orange)">
+      <div class="num orange">↓64%</div>
+      <div style="font-size:0.82em;font-weight:600;margin-top:4px">LLM generation hurts EM</div>
+      <div class="desc">Full LLM debate generation dropped EM from 0.80 → 0.22. LLMs paraphrase answers — rule-based extraction is better for factoid QA.</div>
+    </div>
+    <div class="insight-card" style="border-left:4px solid var(--purple)">
+      <div class="num purple">96.5%</div>
+      <div style="font-size:0.82em;font-weight:600;margin-top:4px">Misinformation suppressed</div>
+      <div class="desc">MADAM-RAG debate with label-weighted voting actively suppresses adversarial documents — not just observed, actively blocked.</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px;padding:10px 16px;background:rgba(79,195,247,0.05)">
+    <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+      <span style="font-size:0.72em;color:var(--muted)">Practical takeaway:</span>
+      <span style="font-size:0.72em">For <span class="blue">factoid QA</span> → best config is <span class="green">Iterative Hybrid + Haiku reranker + rule-based extraction</span></span>
+      <span style="font-size:0.72em">For <span class="purple">free-form QA</span> → LLM generation with Iterative Hybrid gives best faithfulness (0.574) and lowest hallucination (18%)</span>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════
+     SLIDE 14 — CONCLUSION
+══════════════════════════════════════════════ -->
+<section data-background-gradient="radial-gradient(ellipse at 70% 60%, #0a1a30 0%, #080818 70%)">
+  <div class="slide-header">
+    <h2>Conclusion</h2>
+  </div>
+
+  <div class="conclusion-grid">
+    <div>
+      <h3 style="color:var(--gold);margin-bottom:12px">What We Built</h3>
+      <div class="built-pill">
+        <div class="dot" style="background:var(--blue)"></div>
+        <p>End-to-end RAG pipeline combining 5 research papers into one unified, runnable system</p>
+      </div>
+      <div class="built-pill">
+        <div class="dot" style="background:var(--purple)"></div>
+        <p>Three retrieval methods, LLM reranker, multi-agent debate with misinformation suppression</p>
+      </div>
+      <div class="built-pill">
+        <div class="dot" style="background:var(--green)"></div>
+        <p>Faithfulness checking with deterministic fallback — graceful degradation at every step</p>
+      </div>
+      <div class="built-pill">
+        <div class="dot" style="background:var(--orange)"></div>
+        <p>Benchmarked across 400 queries, 3 LLM backends, full failure-mode taxonomy</p>
+      </div>
+    </div>
+    <div>
+      <h3 style="color:var(--gold);margin-bottom:12px">What We Proved</h3>
+      <div class="card" style="padding:12px;margin-bottom:8px;background:rgba(105,240,174,0.06)">
+        <div style="font-size:0.75em"><span class="green bold">EM 0.800</span> on HotpotQA — competitive with published baselines</div>
+      </div>
+      <div class="card" style="padding:12px;margin-bottom:8px;background:rgba(206,147,216,0.06)">
+        <div style="font-size:0.75em"><span class="purple bold">96.5%</span> misinformation suppression on adversarial RAMDocs</div>
+      </div>
+      <div class="card" style="padding:12px;margin-bottom:8px;background:rgba(239,83,80,0.06)">
+        <div style="font-size:0.75em">Better retrieval beats better generation — <span class="red bold">9:1 failure ratio</span></div>
+      </div>
+      <div class="card" style="padding:12px;background:rgba(255,213,79,0.06)">
+        <div style="font-size:0.75em">Iterative Hybrid uniquely solves multi-hop retrieval via bridge-entity chaining</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:center;margin-top:18px">
+    <div style="display:inline-flex;gap:20px;align-items:center;background:rgba(255,255,255,0.04);border:1px solid var(--card-border);border-radius:30px;padding:8px 24px">
+      <span style="font-size:0.7em;color:var(--muted)">5 papers</span>
+      <span style="color:var(--card-border)">|</span>
+      <span style="font-size:0.7em;color:var(--muted)">9 pipeline steps</span>
+      <span style="color:var(--card-border)">|</span>
+      <span style="font-size:0.7em;color:var(--muted)">400 queries</span>
+      <span style="color:var(--card-border)">|</span>
+      <span style="font-size:0.7em;color:var(--muted)">3 LLM backends</span>
+      <span style="color:var(--card-border)">|</span>
+      <span style="font-size:0.7em;color:var(--gold);font-weight:700">EM 0.800 ★</span>
+    </div>
+  </div>
+</section>
+
+</div><!-- /slides -->
+</div><!-- /reveal -->
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@4.6.0/dist/reveal.js"></script>
+<script>
+  Reveal.initialize({
+    hash: true,
+    slideNumber: 'c/t',
+    transition: 'slide',
+    transitionSpeed: 'fast',
+    backgroundTransition: 'fade',
+    controls: true,
+    progress: true,
+    center: false,
+    width: 1200,
+    height: 675,
+    margin: 0.04,
+    minScale: 0.2,
+    maxScale: 2.0,
+    plugins: []
+  });
+</script>
+</body>
+</html>

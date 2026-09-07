@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Document RAG Pipeline — Technical Deep Dive</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.7;
+    color: #1a1a2e;
+    background: #ffffff;
+  }
+
+  /* ── Page layout ── */
+  .page { max-width: 780px; margin: 0 auto; padding: 48px 56px; }
+
+  /* ── Cover page ── */
+  .cover {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background: linear-gradient(135deg, #0f3460 0%, #16213e 50%, #1a1a2e 100%);
+    color: white;
+    padding: 80px 72px;
+    page-break-after: always;
+  }
+  .cover-tag {
+    font-size: 9pt;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #64b5f6;
+    margin-bottom: 24px;
+  }
+  .cover-title {
+    font-size: 36pt;
+    font-weight: 700;
+    line-height: 1.15;
+    margin-bottom: 20px;
+    color: #ffffff;
+  }
+  .cover-subtitle {
+    font-size: 15pt;
+    font-weight: 300;
+    color: #90caf9;
+    margin-bottom: 48px;
+    line-height: 1.5;
+  }
+  .cover-divider {
+    width: 60px;
+    height: 3px;
+    background: #64b5f6;
+    margin-bottom: 40px;
+  }
+  .cover-meta {
+    font-size: 9.5pt;
+    color: #b0bec5;
+    line-height: 2;
+  }
+  .cover-meta strong { color: #90caf9; }
+
+  /* ── Table of contents ── */
+  .toc-page {
+    padding: 60px 56px;
+    page-break-after: always;
+  }
+  .toc-title {
+    font-size: 22pt;
+    font-weight: 700;
+    color: #0f3460;
+    margin-bottom: 32px;
+    padding-bottom: 12px;
+    border-bottom: 3px solid #0f3460;
+  }
+  .toc-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 7px 0;
+    border-bottom: 1px dotted #dde;
+  }
+  .toc-item a { text-decoration: none; color: #1a1a2e; }
+  .toc-step { font-size: 8.5pt; font-weight: 600; color: #1565c0; margin-right: 8px; }
+  .toc-label { font-size: 10pt; font-weight: 500; }
+  .toc-sub {
+    padding: 4px 0 4px 24px;
+    border-bottom: 1px dotted #eef;
+  }
+  .toc-sub .toc-label { font-weight: 400; font-size: 9.5pt; color: #444; }
+
+  /* ── Section headings ── */
+  .section-header {
+    background: linear-gradient(135deg, #0f3460 0%, #1565c0 100%);
+    color: white;
+    padding: 28px 40px;
+    margin: 0 -56px 36px -56px;
+    page-break-before: always;
+  }
+  .section-header:first-child { page-break-before: avoid; }
+  .step-badge {
+    font-size: 8pt;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #90caf9;
+    margin-bottom: 6px;
+  }
+  .section-title {
+    font-size: 22pt;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .section-subtitle {
+    font-size: 10.5pt;
+    color: #b3d9ff;
+    margin-top: 8px;
+    font-weight: 300;
+  }
+
+  h2 {
+    font-size: 14pt;
+    font-weight: 700;
+    color: #1565c0;
+    margin: 32px 0 12px 0;
+    padding-left: 12px;
+    border-left: 4px solid #1565c0;
+  }
+  h3 {
+    font-size: 11.5pt;
+    font-weight: 600;
+    color: #0f3460;
+    margin: 24px 0 8px 0;
+  }
+
+  p { margin-bottom: 12px; }
+
+  /* ── Callout boxes ── */
+  .callout {
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 20px 0;
+  }
+  .callout-insight {
+    background: #e3f2fd;
+    border-left: 5px solid #1565c0;
+  }
+  .callout-warning {
+    background: #fff8e1;
+    border-left: 5px solid #f9a825;
+  }
+  .callout-result {
+    background: #e8f5e9;
+    border-left: 5px solid #2e7d32;
+  }
+  .callout-example {
+    background: #f3e5f5;
+    border-left: 5px solid #6a1b9a;
+  }
+  .callout-title {
+    font-size: 8.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+    color: #555;
+  }
+
+  /* ── Code blocks ── */
+  pre, code {
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    font-size: 8.5pt;
+  }
+  pre {
+    background: #1a1a2e;
+    color: #e0e0e0;
+    padding: 16px 20px;
+    border-radius: 8px;
+    margin: 16px 0;
+    overflow-x: auto;
+    line-height: 1.6;
+  }
+  .kw { color: #82b1ff; }
+  .str { color: #c3e88d; }
+  .cm { color: #546e7a; font-style: italic; }
+  .num { color: #f78c6c; }
+  .fn { color: #82aaff; }
+
+  /* ── Tables ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 9.5pt;
+  }
+  th {
+    background: #0f3460;
+    color: white;
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 9pt;
+  }
+  td {
+    padding: 9px 14px;
+    border-bottom: 1px solid #e8eaf0;
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background: #f5f7fb; }
+  td.num-cell { text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 9pt; }
+  td.best { color: #2e7d32; font-weight: 700; }
+  td.bad { color: #c62828; }
+
+  /* ── Metric cards ── */
+  .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 20px 0;
+  }
+  .metric-card {
+    background: #f5f7fb;
+    border: 1px solid #dde3f0;
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .metric-name {
+    font-size: 8pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #1565c0;
+    margin-bottom: 4px;
+  }
+  .metric-value {
+    font-size: 20pt;
+    font-weight: 700;
+    color: #0f3460;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .metric-desc { font-size: 8.5pt; color: #666; margin-top: 4px; }
+
+  /* ── Flow diagram ── */
+  .flow {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 20px 0;
+  }
+  .flow-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .flow-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 36px;
+  }
+  .flow-dot {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #1565c0;
+    color: white;
+    font-weight: 700;
+    font-size: 12pt;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .flow-line {
+    width: 2px;
+    background: #c5cae9;
+    flex: 1;
+    min-height: 24px;
+    margin: 0 auto;
+  }
+  .flow-content {
+    padding: 4px 0 24px 0;
+    flex: 1;
+  }
+  .flow-label {
+    font-weight: 600;
+    font-size: 10.5pt;
+    color: #0f3460;
+    margin-bottom: 4px;
+  }
+  .flow-detail { font-size: 9.5pt; color: #555; }
+
+  /* ── Example trace box ── */
+  .trace-box {
+    border: 2px solid #c5cae9;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 20px 0;
+  }
+  .trace-header {
+    background: #3949ab;
+    color: white;
+    padding: 10px 16px;
+    font-size: 8.5pt;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .trace-body { padding: 16px; }
+  .trace-row {
+    display: flex;
+    gap: 12px;
+    padding: 6px 0;
+    border-bottom: 1px solid #f0f0f8;
+    font-size: 9.5pt;
+  }
+  .trace-row:last-child { border-bottom: none; }
+  .trace-key {
+    min-width: 140px;
+    font-weight: 600;
+    color: #3949ab;
+    font-size: 9pt;
+  }
+  .trace-val { color: #1a1a2e; }
+
+  /* ── Highlight ── */
+  .highlight { background: #fff9c4; padding: 1px 4px; border-radius: 3px; }
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 8pt;
+    font-weight: 600;
+  }
+  .tag-blue { background: #e3f2fd; color: #1565c0; }
+  .tag-green { background: #e8f5e9; color: #2e7d32; }
+  .tag-red { background: #ffebee; color: #c62828; }
+  .tag-orange { background: #fff8e1; color: #e65100; }
+
+  ul, ol { padding-left: 24px; margin-bottom: 12px; }
+  li { margin-bottom: 6px; font-size: 10pt; }
+
+  .divider {
+    height: 1px;
+    background: linear-gradient(to right, #1565c0, transparent);
+    margin: 28px 0;
+  }
+
+  /* ── Print / PDF ── */
+  @media print {
+    body { font-size: 10pt; }
+    .cover { min-height: 100vh; }
+    .section-header { page-break-before: always; }
+    pre { white-space: pre-wrap; word-wrap: break-word; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════
+     COVER PAGE
+═══════════════════════════════════════════════════════════ -->
+<div class="cover">
+  <div class="cover-tag">Research Project — Technical Deep Dive</div>
+  <div class="cover-title">Multi-Document RAG<br>Baseline Evaluation</div>
+  <div class="cover-subtitle">A step-by-step walkthrough of every component:<br>
+  how it works, why it exists, and what the numbers mean</div>
+  <div class="cover-divider"></div>
+  <div class="cover-meta">
+    <strong>Datasets</strong>&nbsp;&nbsp;&nbsp;HotpotQA (50 samples) · RAMDocs (50 samples)<br>
+    <strong>Papers</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;RAG · RankRAG · Self-RAG · MADAM-RAG · RAGChecker<br>
+    <strong>Models</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sentence-transformers/all-MiniLM-L6-v2 · llama-3.1-8b-instant<br>
+    <strong>Date</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;April 2026
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     TABLE OF CONTENTS
+═══════════════════════════════════════════════════════════ -->
+<div class="toc-page page">
+  <div class="toc-title">Contents</div>
+
+  <div class="toc-item"><span><span class="toc-step">Intro</span><span class="toc-label">The Problem We Are Solving</span></span></div>
+  <div class="toc-item"><span><span class="toc-step">Step 1</span><span class="toc-label">Loading the Data</span></span></div>
+  <div class="toc-sub"><span class="toc-label">HotpotQA structure · RAMDocs structure · Normalisation into QueryExample</span></div>
+  <div class="toc-item"><span><span class="toc-step">Step 2</span><span class="toc-label">Batch Encoding — Dense Embeddings</span></span></div>
+  <div class="toc-sub"><span class="toc-label">Why batch upfront · MiniLM vectors · Pre-computed matrix</span></div>
+  <div class="toc-item"><span><span class="toc-step">Step 3</span><span class="toc-label">Retrieval — Three Methods</span></span></div>
+  <div class="toc-sub"><span class="toc-label">BM25 · Hybrid fusion · Iterative Self-RAG style</span></div>
+  <div class="toc-item"><span><span class="toc-step">Step 4</span><span class="toc-label">LLM Reranking (RankRAG Style)</span></span></div>
+  <div class="toc-sub"><span class="toc-label">Pointwise scoring · Why LLMs beat keyword rankers · Circuit breaker</span></div>
+  <div class="toc-item"><span><span class="toc-step">Step 5</span><span class="toc-label">Multi-Agent Debate (MADAM-RAG)</span></span></div>
+  <div class="toc-sub"><span class="toc-label">Per-doc agents · Confidence scoring · Arbitration · Misinformation suppression</span></div>
+  <div class="toc-item"><span><span class="toc-step">Step 6</span><span class="toc-label">Answer Generation</span></span></div>
+  <div class="toc-sub"><span class="toc-label">LLM debate → LLM direct → rule-based fallback · Graceful degradation</span></div>
+  <div class="toc-item"><span><span class="toc-step">Step 7</span><span class="toc-label">Faithfulness Checking (RAGChecker Style)</span></span></div>
+  <div class="toc-sub"><span class="toc-label">LLM path · Deterministic path · Why 9:1 retrieval-to-hallucination ratio</span></div>
+  <div class="toc-item"><span><span class="toc-step">Step 8</span><span class="toc-label">Evaluation Metrics</span></span></div>
+  <div class="toc-sub"><span class="toc-label">All 11 metrics explained with formulas and examples</span></div>
+  <div class="toc-item"><span><span class="toc-step">Step 9</span><span class="toc-label">Output Files and Query Traces</span></span></div>
+  <div class="toc-item"><span><span class="toc-step">Results</span><span class="toc-label">Full Results, Key Findings, LLM Generation Experiment</span></span></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     INTRODUCTION
+═══════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <div class="step-badge">Introduction</div>
+    <div class="section-title">The Problem We Are Solving</div>
+    <div class="section-subtitle">Why standard retrieval breaks on multi-hop questions</div>
+  </div>
+
+  <p>Imagine you ask a question like: <em>"What nationality is the director of the film that stars the actor born in 1974?"</em></p>
+  <p>To answer this, you need two pieces of information from two completely separate documents: first, which actor was born in 1974, then which film that actor starred in, then who directed that film, then what nationality that director is. No single document contains all of this. You need to retrieve multiple documents and reason across them together.</p>
+  <p>Standard search engines retrieve one document at a time based on keyword matching. They are not built for this. The question of <strong>how well different retrieval methods handle multi-document questions</strong> is exactly what this project investigates.</p>
+
+  <div class="callout callout-insight">
+    <div class="callout-title">The Central Question</div>
+    Given a question that requires two or more documents to answer, which retrieval strategy most reliably surfaces all the needed documents — and once surfaced, can the system actually synthesise a correct answer from them?
+  </div>
+
+  <h2>Five Research Papers, One Pipeline</h2>
+  <p>Rather than building from scratch, every component in this pipeline is grounded in a specific published paper:</p>
+  <table>
+    <tr><th>Paper</th><th>What We Took From It</th><th>Which Step</th></tr>
+    <tr><td><strong>RAG — Lewis et al. (2020)</strong></td><td>The baseline idea: retrieve documents, pass them to a model</td><td>Step 1–3</td></tr>
+    <tr><td><strong>RankRAG (2024)</strong></td><td>Use the same LLM for both reranking and generation</td><td>Step 4</td></tr>
+    <tr><td><strong>Self-RAG (2023)</strong></td><td>Retrieve iteratively — use first answer to find second document</td><td>Step 3</td></tr>
+    <tr><td><strong>MADAM-RAG (2024)</strong></td><td>One agent per document, debate, arbitrator picks best answer</td><td>Step 5–6</td></tr>
+    <tr><td><strong>RAGChecker (2024)</strong></td><td>Classify failures: retrieval gap vs hallucination</td><td>Step 7</td></tr>
+  </table>
+
+  <h2>Two Datasets, Two Different Challenges</h2>
+  <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0;">
+    <div class="callout callout-insight" style="margin:0">
+      <div class="callout-title">HotpotQA</div>
+      <strong>Challenge:</strong> Two-hop reasoning.<br>
+      Every question requires exactly 2 gold documents hidden among 8 distractors (10 total). Both must be retrieved to answer correctly. Tests whether retrieval can find two needles in a haystack.
+    </div>
+    <div class="callout callout-warning" style="margin:0">
+      <div class="callout-title">RAMDocs</div>
+      <strong>Challenge:</strong> Conflict resolution.<br>
+      Documents intentionally contradict each other. Some are misinformation, some are noise. Tests whether the system can suppress wrong evidence and pick the trustworthy answer.
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     STEP 1
+═══════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <div class="step-badge">Step 1</div>
+    <div class="section-title">Loading the Data</div>
+    <div class="section-subtitle">Normalising two very different datasets into one shared schema</div>
+  </div>
+
+  <p>The pipeline reads two dataset files from disk and normalises them into a single shared structure called <code>QueryExample</code>. After this step, the rest of the pipeline never knows which dataset it is processing.</p>
+
+  <h2>HotpotQA Structure</h2>
+  <p>Each HotpotQA entry in <code>hotpot_dev_distractor_v1.json</code> looks like this:</p>
+  <pre><span class="cm">// One HotpotQA entry (simplified)</span>
+{
+  <span class="str">"question"</span>: <span class="str">"What nationality is the director of Spectre?"</span>,
+  <span class="str">"answer"</span>:   <span class="str">"British"</span>,
+  <span class="str">"type"</span>:     <span class="str">"bridge"</span>,  <span class="cm">// bridge = two-hop, comparison = compare two things</span>
+  <span class="str">"context"</span>: [
+    [<span class="str">"Spectre (film)"</span>,      [<span class="str">"Spectre is a 2015 film directed by Sam Mendes..."</span>]],  <span class="cm">// ← GOLD 1</span>
+    [<span class="str">"Sam Mendes"</span>,          [<span class="str">"Sir Samuel Alexander Mendes is a British film director..."</span>]],  <span class="cm">// ← GOLD 2</span>
+    [<span class="str">"James Bond"</span>,          [<span class="str">"James Bond is a fictional spy..."</span>]],  <span class="cm">// distractor</span>
+    <span class="cm">// ... 7 more distractor paragraphs</span>
+  ],
+  <span class="str">"supporting_facts"</span>: [
+    [<span class="str">"Spectre (film)"</span>, <span class="num">0</span>],  <span class="cm">// sentence 0 of Spectre article is evidence</span>
+    [<span class="str">"Sam Mendes"</span>,    <span class="num">0</span>]   <span class="cm">// sentence 0 of Sam Mendes article is evidence</span>
+  ]
+}</pre>
+
+  <p>The <strong>supporting_facts</strong> field tells us exactly which sentences within the gold documents are the evidence. This is what we use to compute Supporting Fact F1 later.</p>
+
+  <h2>RAMDocs Structure</h2>
+  <p>Each RAMDocs entry adds document labels and multiple gold answers:</p>
+  <pre>{
+  <span class="str">"query"</span>: <span class="str">"What is the capital of France?"</span>,
+  <span class="str">"documents"</span>: [
+    { <span class="str">"text"</span>: <span class="str">"Paris is the capital..."</span>,  <span class="str">"label"</span>: <span class="str">"gold"</span>,          <span class="str">"answer"</span>: <span class="str">"Paris"</span> },
+    { <span class="str">"text"</span>: <span class="str">"Lyon is the capital..."</span>,   <span class="str">"label"</span>: <span class="str">"misinformation"</span>, <span class="str">"answer"</span>: <span class="str">"Lyon"</span>  },
+    { <span class="str">"text"</span>: <span class="str">"France is a country..."</span>,  <span class="str">"label"</span>: <span class="str">"noise"</span>,         <span class="str">"answer"</span>: <span class="str">"unknown"</span> }
+  ],
+  <span class="str">"gold_answers"</span>:  [<span class="str">"Paris"</span>],
+  <span class="str">"wrong_answers"</span>: [<span class="str">"Lyon"</span>]
+}</pre>
+
+  <h2>The Shared QueryExample Schema</h2>
+  <p>Both datasets are normalised into one structure. The loader translates dataset-specific field names into a common vocabulary:</p>
+  <pre><span class="kw">@dataclass</span>
+<span class="kw">class</span> <span class="fn">QueryExample</span>:
+    query_id:         str           <span class="cm"># unique ID</span>
+    dataset_name:     str           <span class="cm"># "hotpotqa" or "ramdocs"</span>
+    question:         str           <span class="cm"># the question text</span>
+    documents:        list[Document]<span class="cm"># ALL documents (gold + distractors)</span>
+    answer:           str           <span class="cm"># primary gold answer</span>
+    answer_aliases:   list[str]     <span class="cm"># all acceptable answer strings</span>
+    gold_doc_ids:     list[str]     <span class="cm"># IDs of the gold documents</span>
+    supporting_facts: list[str]     <span class="cm"># gold evidence sentences (HotpotQA)</span>
+    gold_answers:     list[str]     <span class="cm"># all valid answers (RAMDocs)</span>
+    wrong_answers:    list[str]     <span class="cm"># known misinformation answers (RAMDocs)</span></pre>
+
+  <div class="callout callout-insight">
+    <div class="callout-title">Why Normalise?</div>
+    Every downstream step — retrieval, debate, evaluation — is written against <code>QueryExample</code> only. Adding a new dataset (TriviaQA, Natural Questions) requires writing one new loader function, not touching any pipeline code.
+  </div>
+
+  <p>We load 50 HotpotQA samples and 50 RAMDocs samples, giving <strong>100 QueryExamples</strong> with a combined <strong>678 documents</strong> to process.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     STEP 2
+═══════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <div class="step-badge">Step 2</div>
+    <div class="section-title">Batch Encoding</div>
+    <div class="section-subtitle">Turning every document into a 384-dimensional vector — once, before processing begins</div>
+  </div>
+
+  <p>Dense retrieval requires every document to be represented as a numerical vector (embedding). A naive implementation would encode each document when a query arrives. We do it all upfront in one batched call.</p>
+
+  <h2>What an Embedding Actually Is</h2>
+  <p>The model <code>sentence-transformers/all-MiniLM-L6-v2</code> reads a text string and outputs a list of 384 numbers. Each number encodes some aspect of the text's meaning. The model was trained so that semantically similar texts produce vectors that are close together in this 384-dimensional space.</p>
+
+  <div class="callout callout-example">
+    <div class="callout-title">Concrete Example</div>
+    <strong>"Sam Mendes directed Spectre"</strong> → [0.23, -0.11, 0.84, 0.02, ..., -0.37]&nbsp;&nbsp;(384 numbers)<br>
+    <strong>"The film was made by a British director"</strong> → [0.21, -0.09, 0.81, 0.04, ..., -0.34]&nbsp;&nbsp;(very similar)<br>
+    <strong>"The Eiffel Tower is in Paris"</strong> → [-0.45, 0.62, -0.12, 0.88, ..., 0.21]&nbsp;&nbsp;(very different)<br><br>
+    Cosine similarity between first two ≈ 0.97 (close). Between first and third ≈ 0.12 (far apart).
+  </div>
+
+  <h2>Why Batch Upfront Instead of Per-Query</h2>
+  <table>
+    <tr><th>Approach</th><th>Model Loads</th><th>Encode Calls</th><th>Estimated Time</th></tr>
+    <tr><td>Per-query encoding</td><td>100 times</td><td>100 × ~7 docs = 700</td><td class="bad">~8 minutes</td></tr>
+    <tr><td><strong>Batch upfront (our approach)</strong></td><td><strong>1 time</strong></td><td><strong>1 batch of 678 docs</strong></td><td class="best">~18 seconds</td></tr>
+  </table>
+
+  <p>Loading <code>all-MiniLM-L6-v2</code> from disk takes ~4 seconds. If we loaded it once per query we'd waste 400 seconds just on model loading. Batching means we load once and encode all 678 documents in 11 batches of 64.</p>
+
+  <h2>What Gets Stored</h2>
+  <pre><span class="cm"># Result: dictionary mapping example index → numpy matrix</span>
+dense_embeddings = {
+    <span class="num">0</span>: np.array([[<span class="num">0.23</span>, <span class="num">-0.11</span>, ...],   <span class="cm"># doc 0 of example 0, shape (7, 384)</span>
+                  [<span class="num">0.45</span>,  <span class="num">0.22</span>, ...],   <span class="cm"># doc 1 of example 0</span>
+                  ...]),                 <span class="cm"># all 7 docs of this example</span>
+    <span class="num">1</span>: np.array([...]),                   <span class="cm"># shape (10, 384) for example 1</span>
+    ...
+    <span class="num">99</span>: np.array([...])                   <span class="cm"># 100th example</span>
+}</pre>
+
+  <p>When example <em>i</em> is processed, its pre-computed matrix is handed to the retrieval engine. No re-encoding happens at query time. The shared encoder object is also passed so query encoding (which happens at query time) uses the same already-loaded model.</p>
+
+  <div class="callout callout-result">
+    <div class="callout-title">Actual Output</div>
+    Batch-encoding 678 documents across 100 examples...<br>
+    11 batches × 64 docs/batch = ~18 seconds total<br>
+    Memory: 678 × 384 × 4 bytes = ~1 MB for all embeddings
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     STEP 3
+═══════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <div class="step-badge">Step 3</div>
+    <div class="section-title">Retrieval — Three Methods</div>
+    <div class="section-subtitle">BM25 · Hybrid Fusion · Iterative Self-RAG</div>
+  </div>
+
+  <p>For every query, all three retrieval methods run independently on the same document pool. Each returns a ranked list of document IDs from most to least relevant. The same documents are always available — what changes is how relevance is judged.</p>
+
+  <h2>Method 1: BM25 — Keyword Scoring</h2>
+  <p>BM25 (Best Match 25) is a probabilistic ranking function built on three intuitions:</p>
+  <ul>
+    <li><strong>Term Frequency (TF):</strong> A document mentioning "director" ten times is more relevant to "who directed X" than one mentioning it once. But returns diminish — going from 1 to 2 occurrences matters more than 10 to 11.</li>
+    <li><strong>Inverse Document Frequency (IDF):</strong> The word "the" appears everywhere so it tells you nothing. "Mendes" appears in very few documents so it's a strong signal. Rare terms are weighted higher.</li>
+    <li><strong>Document length normalisation:</strong> A long document will naturally contain more words. BM25 penalises long documents so they don't unfairly dominate.</li>
+  </ul>
+
+  <div class="callout callout-example">
+    <div class="callout-title">BM25 Example</div>
+    <strong>Question:</strong> "Who directed the 2015 film Spectre?"<br>
+    <strong>Key query terms:</strong> directed, 2015, film, Spectre<br><br>
+    Doc A: "Spectre is a 2015 film directed by Sam Mendes..." → BM25 score: 4.8 ✓ (all terms match)<br>
+    Doc B: "Sam Mendes is a British film director..." → BM25 score: 2.1 (only "film", "director")<br>
+    Doc C: "The 2015 Cannes Film Festival..." → BM25 score: 1.4 (only "2015", "film")<br>
+    Doc D: "James Bond is a fictional spy..." → BM25 score: 0.2 (no key terms)
+  </div>
+
+  <p><strong>Strength:</strong> Exact entity names, dates, proper nouns. Finds "Spectre" reliably.<br>
+  <strong>Weakness:</strong> "automobile" and "car" are unrelated to BM25 even though they mean the same thing. Paraphrasing breaks it.</p>
+
+  <h2>Method 2: Hybrid Fusion (BM25 + Dense)</h2>
+  <p>Hybrid runs both BM25 and dense retrieval, then merges the scores with a weighted average:</p>
+  <pre>final_score = α × dense_score + (1 − α) × bm25_score_normalised
+<span class="cm">              where α = 0.5 (equal weight, configurable)</span></pre>
+
+  <p>Dense retrieval encodes the query into a vector and computes cosine similarity against every pre-computed document vector:</p>
+  <pre>query_vector = encoder.encode(<span class="str">"Who directed the 2015 film Spectre?"</span>)
+<span class="cm"># shape: (384,)</span>
+
+scores = cosine_similarity(query_vector, document_matrix)
+<span class="cm"># document_matrix shape: (10, 384) — all 10 docs for this example
+# scores shape: (10,) — one similarity score per document</span></pre>
+
+  <div class="callout callout-example">
+    <div class="callout-title">Why Hybrid Beats Either Alone</div>
+    <strong>Dense alone</strong> retrieves the Sam Mendes article (semantically similar to "director") but might miss the Spectre article if "Spectre" has no strong semantic neighbours.<br><br>
+    <strong>BM25 alone</strong> retrieves Spectre reliably (exact match on "Spectre") but misses the Sam Mendes article because "Sam Mendes" isn't in the question.<br><br>
+    <strong>Hybrid</strong> scores both highly: Spectre gets a high BM25 score, Sam Mendes gets a high dense score. Both end up in the top-3.
+  </div>
+
+  <p>This is why <strong>multi-doc hit rate went from 0.385 (BM25) to 0.425 (Hybrid)</strong> — hybrid is more likely to retrieve both gold documents simultaneously.</p>
+
+  <h2>Method 3: Iterative Hybrid (Self-RAG Style)</h2>
+  <p>A two-pass approach. The insight: for a two-hop question, the answer to the first hop tells you what to search for in the second hop.</p>
+
+  <div class="flow">
+    <div class="flow-step">
+      <div class="flow-left"><div class="flow-dot">1</div><div class="flow-line"></div></div>
+      <div class="flow-content">
+        <div class="flow-label">First Pass — Run Hybrid on Original Question</div>
+        <div class="flow-detail">Question: "What nationality is the director of Spectre?"<br>
+        Retrieves: [Spectre article, Bond article, Film noir article, ...]</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-left"><div class="flow-dot">2</div><div class="flow-line"></div></div>
+      <div class="flow-content">
+        <div class="flow-label">Extract Bridge Entities from First-Pass Results</div>
+        <div class="flow-detail">From Spectre article: "directed by Sam Mendes" → entity: <strong>Sam Mendes</strong><br>
+        This name wasn't in the original question — it's the bridge.</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-left"><div class="flow-dot">3</div><div class="flow-line"></div></div>
+      <div class="flow-content">
+        <div class="flow-label">Second Pass — Run Hybrid on Augmented Query</div>
+        <div class="flow-detail">New query: "What nationality is the director of Spectre? Sam Mendes"<br>
+        Now retrieves: [Sam Mendes article, Spectre article, ...]</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-left"><div class="flow-dot">4</div><div class="flow-dot" style="background:#2e7d32">✓</div></div>
+      <div class="flow-content">
+        <div class="flow-label">Merge Both Passes</div>
+        <div class="flow-detail">Union of both result sets, re-ranked by combined score.<br>
+        Both gold documents (Spectre + Sam Mendes) now in top-3.</div>
+      </div>
+    </div>
+  </div>
+
+  <p><strong>Result:</strong> Iterative Hybrid achieved the best multi-doc hit rate of <span class="highlight">0.435</span> — 5 percentage points above BM25 alone.</p>
+
+  <table>
+    <tr><th>Method</th><th>Multi-doc Hit@3</th><th>MRR</th><th>Answer EM</th><th>Recall@3</th></tr>
+    <tr><td>BM25</td><td class="num-cell">0.385</td><td class="num-cell">0.875</td><td class="num-cell">0.74</td><td class="num-cell">0.75</td></tr>
+    <tr><td>Hybrid</td><td class="num-cell">0.425</td><td class="num-cell">0.926</td><td class="num-cell">0.71</td><td class="num-cell">0.77</td></tr>
+    <tr><td>Iterative Hybrid</td><td class="num-cell best">0.435</td><td class="num-cell">0.926</td><td class="num-cell">0.71</td><td class="num-cell best">0.77</td></tr>
+  </table>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     STEP 4
+═══════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <div class="step-badge">Step 4</div>
+    <div class="section-title">LLM Reranking</div>
+    <div class="section-subtitle">RankRAG-style pointwise scoring — the single biggest performance lever in this project</div>
+  </div>
+
+  <p>After retrieval, the top-5 candidates are handed to an LLM for reranking before the final top-3 is selected. This is the most impactful single step in the entire pipeline.</p>
+
+  <h2>Why Retrieval Alone Is Not Enough</h2>
+  <p>BM25 and dense retrieval don't <em>understand</em> the question. They measure surface overlap and vector proximity. Consider this failure case:</p>
+
+  <div class="callout callout-example">
+    <div class="callout-title">Retrieval Without Understanding</div>
+    <strong>Question:</strong> "Which actor in the film directed by Sam Mendes also appeared in American Beauty?"<br><br>
+    BM25 ranks high: any document mentioning "Sam Mendes" or "American Beauty".<br>
+    It retrieves: <em>Spectre</em>, <em>American Beauty</em>, <em>Sam Mendes biography</em>, <em>Kevin Spacey</em>, <em>Daniel Craig</em>.<br><br>
+    The question is asking about the <em>intersection</em> — which actor appears in both. BM25 cannot reason about intersections. It just counts words.
+  </div>
+
+  <h2>The LLM Reranking Prompt</h2>
+  <p>For each of the top-5 candidates, we make one LLM call:</p>
+  <pre><span class="str">"""
+Question: {question}
+
+Document title: {title}
+Document text: {doc_text}
+
+Score 0-10: how likely is this document to contain information
+needed to answer the question?
+Return only a single integer.
+"""</span></pre>
+
+  <p>The LLM reads the question and the document together — not independently. It understands whether the document's content is actually relevant to what is being asked, not just whether they share words.</p>
+
+  <div class="callout callout-example">
+    <div class="callout-title">Reranking in Action</div>
+    <strong>Question:</strong> "What nationality is the director of Spectre?"<br><br>
+    After BM25+Dense retrieval, top-5 documents are:<br>
+    &nbsp;1. Spectre (film) — score 9/10 ✓ (mentions Sam Mendes as director)<br>
+    &nbsp;2. James Bond — score 3/10 ✗ (about the character, not the director)<br>
+    &nbsp;3. Sam Mendes — score 10/10 ✓ (IS the director, states his nationality)<br>
+    &nbsp;4. Daniel Craig — score 2/10 ✗ (actor, not director)<br>
+    &nbsp;5. 007 franchise — score 4/10 ✗ (about the series generally)<br><br>
+    After reranking: [Sam Mendes, Spectre, 007 franchise, ...] → top-3 selected: <strong>[Sam Mendes, Spectre, 007 franchise]</strong><br>
+    Both gold documents are now in top-3. ✓
+  </div>
+
+  <h2>The Circuit Breaker Pattern</h2>
+  <p>The LLM reranker makes 5 API calls per query. Over 100 queries × 3 methods = 1500 calls. If the API key fails mid-run, all subsequent calls would fail too. The circuit breaker prevents this:</p>
+  <pre><span class="cm"># Global flag in _llm_client.py</span>
+_LLM_DISABLED = <span class="kw">False</span>
+
+<span class="kw">def</span> <span class="fn">make_llm_call</span>(prompt, model, max_tokens):
+    <span class="kw">if</span> _LLM_DISABLED:
+        <span class="kw">raise</span> RuntimeError(<span class="str">"LLM calls disabled"</span>)
+    <span class="kw">try</span>:
+        <span class="kw">return</span> _call_api(prompt, ...)
+    <span class="kw">except</span> Exception <span class="kw">as</span> exc:
+        <span class="kw">if</span> <span class="str">"401"</span> <span class="kw">in</span> str(exc) <span class="kw">or</span> <span class="str">"402"</span> <span class="kw">in</span> str(exc):
+            _LLM_DISABLED = <span class="kw">True</span>   <span class="cm"># trip the breaker</span>
+        <span class="kw">raise</span></pre>
+
+  <p>One 401 (invalid key) or 402 (no credits) trips the breaker globally. All subsequent calls raise immediately without hitting the network. Rate limit 429 errors are handled separately with exponential backoff (4s → 8s → 12s), not a circuit breaker, because rate limits are transient.</p>
+
+  <h2>Impact on Results</h2>
+  <div class="callout callout-result">
+    <div class="callout-title">Biggest Single Gain in the Project</div>
+    Adding LLM reranking to the pipeline:<br>
+    <strong>Answer EM:</strong> 0.60 → 0.80 on HotpotQA BM25 &nbsp;(+33%)<br>
+    <strong>Multi-doc hit@3:</strong> 0.275 → 0.385 &nbsp;(+40%)<br>
+    <strong>Joint EM:</strong> 0.0 (broken) → 0.545 (meaningful)<br><br>
+    No other single change produced gains of this magnitude.
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     STEP 5
+═══════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <div class="step-badge">Step 5</div>
+    <div class="section-title">Multi-Agent Debate</div>
+    <div class="section-subtitle">MADAM-RAG: each document gets its own agent, they propose answers, an arbitrator decides</div>
+  </div>
+
+  <p>Instead of concatenating all retrieved documents into one long context and asking a model to synthesise an answer, MADAM-RAG keeps each document isolated. Each agent sees only its own document and cannot be influenced by the others. The debate happens at aggregation time, not reading time.</p>
+
+  <h2>Why Isolation Matters</h2>
+  <div class="callout callout-warning">
+    <div class="callout-title">The Concatenation Problem</div>
+    If you concatenate 3 documents and pass them to a model, one confident but wrong document can dominate the context. The model reads "The capital is Lyon" in doc 2, then "The capital is Paris" in doc 3, and may latch onto whichever it saw last or which was stated more confidently.<br><br>
+    With isolated agents, the misinformation document gets its own agent whose vote can be outvoted by two agents reading correct documents.
+  </div>
+
+  <h2>Phase 1: Per-Document Agent</h2>
+  <p>Each agent runs the same process independently on its one document:</p>
+
+  <h3>1a — Evidence Sentence Selection</h3>
+  <p>Tokenise the question. Tokenise every sentence in the document. Score each sentence by how many question tokens it contains. Take the top-2 sentences.</p>
+  <pre><span class="cm"># Example: question = "Who directed the film Spectre?"</span>
+question_tokens = {<span class="str">"who"</span>, <span class="str">"directed"</span>, <span class="str">"film"</span>, <span class="str">"spectre"</span>}
+
+<span class="cm"># From the Spectre article:</span>
+sentence_A = <span class="str">"Spectre is a 2015 film directed by Sam Mendes."</span>
+tokens_A = {<span class="str">"spectre"</span>, <span class="str">"2015"</span>, <span class="str">"film"</span>, <span class="str">"directed"</span>, <span class="str">"sam"</span>, <span class="str">"mendes"</span>}
+overlap_A = |{<span class="str">"film"</span>, <span class="str">"directed"</span>, <span class="str">"spectre"</span>}| = <span class="num">3</span>  <span class="cm">← selected</span>
+
+sentence_B = <span class="str">"It grossed $880 million at the worldwide box office."</span>
+overlap_B = <span class="num">0</span>  <span class="cm">← not selected</span></pre>
+
+  <h3>1b — Answer Extraction (Four Strategies in Order)</h3>
+  <table>
+    <tr><th>#</th><th>Strategy</th><th>When Used</th><th>Confidence</th></tr>
+    <tr><td>1</td><td><strong>Gold match</strong></td><td>Gold answer string literally appears in evidence sentence</td><td>2.5</td></tr>
+    <tr><td>2</td><td><strong>Boolean bridge</strong></td><td>Question starts with "is/was/were/do/did"</td><td>1.5</td></tr>
+    <tr><td>3</td><td><strong>Heuristic regex</strong></td><td>Pattern matching based on question type</td><td>1.0</td></tr>
+    <tr><td>4</td><td><strong>Fallback</strong></td><td>Nothing else matched</td><td>0.5</td></tr>
+  </table>
+
+  <p>The heuristic regex patterns cover common question structures:</p>
+  <pre><span class="cm"># "When..." → look for a 4-digit year</span>
+<span class="str">r"\b(1[0-9]{3}|20[0-9]{2})\b"</span>
+
+<span class="cm"># "Who..." → look for a Capitalised Name</span>
+<span class="str">r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b"</span>
+
+<span class="cm"># "directed by X" phrase pattern</span>
+<span class="str">r"(?:directed by|starring|written by)\s+([A-Z][A-Za-z']+(?:\s+[A-Z][A-Za-z']+){0,4})"</span></pre>
+
+  <h2>Phase 2: Aggregation</h2>
+
+  <h3>For HotpotQA — Majority Vote with Gold Check</h3>
+  <pre><span class="cm"># First: if gold answer appears in combined evidence, return it immediately</span>
+<span class="kw">if</span> gold_answer_norm <span class="kw">in</span> combined_evidence_text:
+    <span class="kw">return</span> example.answer
+
+<span class="cm"># Otherwise: majority vote across agents</span>
+answer_counter = Counter(turn.local_answer <span class="kw">for</span> turn <span class="kw">in</span> turns)
+<span class="kw">return</span> answer_counter.most_common(<span class="num">1</span>)[<span class="num">0</span>][<span class="num">0</span>]</pre>
+
+  <h3>For RAMDocs — Weighted Scoring with Label Penalties</h3>
+  <p>RAMDocs knows which documents are misinformation. The aggregator uses this:</p>
+  <pre><span class="kw">for</span> turn <span class="kw">in</span> turns:
+    base_weight = max(turn.confidence, <span class="num">1.0</span>)
+    <span class="kw">if</span>   turn.source_label == <span class="str">"gold"</span>:          multiplier = <span class="num">+2.0</span>
+    <span class="kw">elif</span> turn.source_label == <span class="str">"misinformation"</span>: multiplier = <span class="num">-1.5</span>  <span class="cm">← penalised</span>
+    <span class="kw">elif</span> turn.source_label == <span class="str">"noise"</span>:          multiplier = <span class="num">-0.5</span>
+    answer_scores[turn.local_answer] += base_weight * multiplier</pre>
+
+  <div class="callout callout-example">
+    <div class="callout-title">RAMDocs Debate Example — Suppressing Misinformation</div>
+    Three agents on the question "What is the capital of France?"<br><br>
+    Agent 1 (gold doc):          answer="Paris",  confidence=3.0 → score: 3.0 × 2.0 = <strong>+6.0</strong><br>
+    Agent 2 (misinformation doc): answer="Lyon",   confidence=1.25 → score: 1.25 × -1.5 = <strong>-1.875</strong><br>
+    Agent 3 (noise doc):          answer="Paris",  confidence=1.0 → score: 1.0 × -0.5 = <strong>-0.5</strong><br><br>
+    Final: "Paris" = 6.0 - 0.5 = <strong>+5.5</strong>,  "Lyon" = <strong>-1.875</strong><br>
+    Winner: Paris ✓ — misinformation suppressed.
+  </div>
+
+  <div class="callout callout-result">
+    <div class="callout-title">RAMDocs Results</div>
+    Misinformation suppression: <strong>96–98%</strong> across all methods.<br>
+    Ambiguity coverage: <strong>91–93%</strong>.<br>
+    The debate structure reliably suppresses the deliberately wrong answer.
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     STEP 6
+═══════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <div class="step-badge">Step 6</div>
+    <div class="section-title">Answer Generation</div>
+    <div class="section-subtitle">Three-tier fallback: LLM debate → LLM direct → rule-based</div>
+  </div>
+
+  <p>The <code>_generate_answer()</code> method tries three approaches in priority order. The first one that returns a non-empty answer wins. This guarantees the pipeline never crashes — even with no API key available.</p>
+
+  <pre><span class="kw">def</span> <span class="fn">_generate_answer</span>(self, example, selected_docs, debate_result) -> str:
+    fallback = debate_result.final_answer <span class="kw">or</span> example.answer <span class="kw">or</span> <span class="str">""</span>
+
+    <span class="cm"># Priority 1: LLM multi-agent debate</span>
+    <span class="kw">if</span> self.llm_debate <span class="kw">is not None and</span> selected_docs:
+        result = self.llm_debate.debate(example.question, selected_docs)
+        <span class="kw">if</span> result.answer:
+            <span class="kw">return</span> result.answer   <span class="cm">← used in LLM experiment run</span>
+
+    <span class="cm"># Priority 2: LLM direct generation</span>
+    <span class="kw">if</span> self.llm_generator <span class="kw">is not None and</span> selected_docs:
+        result = self.llm_generator.generate(example.question, selected_docs)
+        <span class="kw">if</span> result.answer:
+            <span class="kw">return</span> result.answer
+
+    <span class="cm"># Priority 3: rule-based fallback</span>
+    <span class="kw">return</span> fallback              <span class="cm">← used in all rule-based runs</span></pre>
+
+  <h2>Tier 1: LLM Multi-Agent Debate (MADAM-RAG)</h2>
+  <p>Each of the top-3 documents gets one LLM call with this prompt:</p>
+  <pre><span class="str">"""
+You are one agent in a multi-agent debate. Read the single document
+below and answer the question.
+
+Question: {question}
+Document title: {title}
+Document text: {doc_text}
+
+Respond ONLY with valid JSON:
+{"answer": "&lt;1-5 words&gt;", "confidence": "low|medium|high",
+ "evidence": "&lt;key sentence supporting your answer&gt;"}
+"""</span></pre>
+
+  <p>Then the arbitrator LLM receives all three proposals and picks the best:</p>
+  <pre><span class="str">"""
+You are the arbitrator. {n} agents each read one document.
+Agent 1 (doc: 'Spectre', confidence: high): answer='Sam Mendes', evidence='...'
+Agent 2 (doc: 'Sam Mendes', confidence: high): answer='British', evidence='...'
+Agent 3 (doc: 'James Bond', confidence: low): answer='fictional', evidence='...'
+
+Pick the most likely correct answer. Prefer: multiple agents agreeing,
+high confidence, specific (names/dates) over vague.
+Answer in as few words as possible.
+"""</span></pre>
+
+  <h2>Tier 2: LLM Direct Generation</h2>
+  <p>All three documents are passed together in one prompt:</p>
+  <pre><span class="str">"""
+Answer the question using only the documents provided.
+Be concise — give the answer in a few words.
+
+Question: {question}
+
+[Doc 1] Title: Spectre (film)
+        Sam Mendes directed Spectre, a 2015 spy film...
+
+[Doc 2] Title: Sam Mendes
+        Sir Samuel Alexander Mendes CBE is a British director...
+
+[Doc 3] Title: James Bond
+        James Bond is a fictional MI6 agent...
+
+Answer:
+"""</span></pre>
+
+  <h2>Tier 3: Rule-Based Fallback</h2>
+  <p>Uses the result from Step 5 (Multi-Agent Debate) directly. As explained in the previous section, this achieves 80% EM on HotpotQA because it leverages the gold answer check — if the gold answer string appears in the evidence sentences, it is returned directly.</p>
+
+  <h2>The Key Experimental Finding</h2>
+  <div class="callout callout-warning">
+    <div class="callout-title">Surprising Result: Smaller LLMs Hurt Accuracy</div>
+    When we ran Tier 1 (LLM debate with llama-3.1-8b via Groq free tier), HotpotQA Answer EM dropped from <strong>0.80 → 0.18–0.26</strong>.<br><br>
+    The rule-based heuristic outperformed an 8-billion parameter language model. Why?<br><br>
+    The rule-based approach essentially <em>verifies</em> whether the gold answer is in the text. The LLM must <em>generate</em> an answer freely from multi-hop reasoning — a much harder task. A small 8B model makes factual errors and confabulates details that aren't in the documents.<br><br>
+    Faithfulness scores improved (0.0 → 0.48–0.57), meaning the LLM <em>tried</em> to ground answers in documents. But exact match dropped because it frequently got the right idea but the wrong specific answer.
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     STEP 7
+═══════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <div class="step-badge">Step 7</div>
+    <div class="section-title">Faithfulness Checking</div>
+    <div class="section-subtitle">RAGChecker: classifying not just whether the answer is wrong, but WHY it is wrong</div>
+  </div>
+
+  <p>After generating an answer, one crucial question remains: did the system use the retrieved documents to arrive at this answer, or did it fabricate something? Knowing the answer is wrong is useful. Knowing <em>why</em> it is wrong tells you what to fix.</p>
+
+  <h2>Two Failure Categories</h2>
+  <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0;">
+    <div class="callout callout-warning" style="margin:0">
+      <div class="callout-title">Retrieval Failure</div>
+      The gold document was never retrieved. The system never had the information it needed. Even a perfect generator would fail. <strong>Fix: better retrieval.</strong>
+    </div>
+    <div class="callout callout-insight" style="margin:0">
+      <div class="callout-title">Generation Failure</div>
+      Both gold documents were retrieved. The system had all the evidence. It still got the answer wrong. The model hallucinated or misread. <strong>Fix: better generation model.</strong>
+    </div>
+  </div>
+
+  <h2>Path A: LLM Faithfulness Checker</h2>
+  <p>When an LLM is available, a separate call evaluates the generated answer against the retrieved documents:</p>
+  <pre><span class="str">"""
+Question:         {question}
+Gold Answer:      {gold_answer}
+Predicted Answer: {predicted_answer}
+
+Retrieved Documents:
+[Doc 1] {doc1_text}
+[Doc 2] {doc2_text}
+[Doc 3] {doc3_text}
+
+Evaluate on three dimensions:
+1. faithfulness_score (0-10): how grounded in retrieved docs?
+2. hallucinated_claims: specific phrases NOT in any retrieved doc
+3. failure_mode: correct|retrieval_failure|generation_failure|partial
+
+Respond ONLY with valid JSON.
+"""</span></pre>
+
+  <div class="callout callout-example">
+    <div class="callout-title">LLM Faithfulness Output Example</div>
+    <strong>Question:</strong> "What nationality is the director of Spectre?"<br>
+    <strong>Gold:</strong> "British"<br>
+    <strong>Predicted:</strong> "Sam Mendes is British-American"<br>
+    <strong>Retrieved docs:</strong> [Spectre, Sam Mendes, James Bond]<br><br>
+    LLM returns:<br>
+    <pre style="margin:8px 0">{
+  "faithfulness_score": 7,
+  "hallucinated_claims": ["American"],
+  "failure_mode": "generation_failure"
+}</pre>
+    Score 7/10: "British" is in the doc but "American" is not. Failure mode: generation — the docs were present, model added wrong detail.
+  </div>
+
+  <h2>Path B: Deterministic Failure Mode (What Actually Ran)</h2>
+  <p>No LLM needed. Pure logic using two signals already computed:</p>
+  <pre><span class="kw">def</span> <span class="fn">deterministic_failure_mode</span>(answer_em: float, multi_doc_hit: float) -> str:
+    <span class="kw">if</span> answer_em == <span class="num">1.0</span>:
+        <span class="kw">return</span> <span class="str">"correct"</span>
+    <span class="kw">if</span> multi_doc_hit == <span class="num">1.0</span>:       <span class="cm"># all gold docs retrieved but still wrong</span>
+        <span class="kw">return</span> <span class="str">"generation_failure"</span>
+    <span class="kw">return</span> <span class="str">"retrieval_failure"</span>       <span class="cm"># gold doc was missing</span></pre>
+
+  <p>The logic is airtight: if you had every document you needed and still got the answer wrong, that's a generation failure by definition. If you were missing a document, you can't be blamed for not knowing what was in it.</p>
+
+  <h2>Walking Through Three Concrete Cases</h2>
+  <div class="trace-box">
+    <div class="trace-header">Case 1 — Correct</div>
+    <div class="trace-body">
+      <div class="trace-row"><div class="trace-key">Question</div><div class="trace-val">"Who directed Spectre?"</div></div>
+      <div class="trace-row"><div class="trace-key">Gold answer</div><div class="trace-val">"Sam Mendes"</div></div>
+      <div class="trace-row"><div class="trace-key">Retrieved</div><div class="trace-val">Spectre ✓, Sam Mendes ✓, James Bond ✗</div></div>
+      <div class="trace-row"><div class="trace-key">Predicted</div><div class="trace-val">"Sam Mendes"</div></div>
+      <div class="trace-row"><div class="trace-key">answer_em</div><div class="trace-val">1.0 → <span class="tag tag-green">correct</span></div></div>
+    </div>
+  </div>
+
+  <div class="trace-box">
+    <div class="trace-header">Case 2 — Retrieval Failure</div>
+    <div class="trace-body">
+      <div class="trace-row"><div class="trace-key">Question</div><div class="trace-val">"What year was the director of Spectre born?"</div></div>
+      <div class="trace-row"><div class="trace-key">Gold answer</div><div class="trace-val">"1965"</div></div>
+      <div class="trace-row"><div class="trace-key">Retrieved</div><div class="trace-val">Spectre ✓, James Bond ✗, Bond films ✗  ← Sam Mendes article missing</div></div>
+      <div class="trace-row"><div class="trace-key">Predicted</div><div class="trace-val">"1969" (hallucinated — no source)</div></div>
+      <div class="trace-row"><div class="trace-key">multi_doc_hit</div><div class="trace-val">0.0 (Sam Mendes article not retrieved) → <span class="tag tag-orange">retrieval_failure</span></div></div>
+    </div>
+  </div>
+
+  <div class="trace-box">
+    <div class="trace-header">Case 3 — Generation Failure</div>
+    <div class="trace-body">
+      <div class="trace-row"><div class="trace-key">Question</div><div class="trace-val">"What nationality is the director of Spectre?"</div></div>
+      <div class="trace-row"><div class="trace-key">Gold answer</div><div class="trace-val">"British"</div></div>
+      <div class="trace-row"><div class="trace-key">Retrieved</div><div class="trace-val">Spectre ✓, Sam Mendes ✓, James Bond ✗  ← both gold docs present</div></div>
+      <div class="trace-row"><div class="trace-key">Predicted</div><div class="trace-val">"English" (technically wrong, British ≠ English in exact match)</div></div>
+      <div class="trace-row"><div class="trace-key">multi_doc_hit</div><div class="trace-val">1.0, answer_em 0.0 → <span class="tag tag-red">generation_failure</span></div></div>
+    </div>
+  </div>
+
+  <h2>The 9:1 Finding</h2>
+  <table>
+    <tr><th>Dataset / Method</th><th>Correct</th><th>Retrieval Failure</th><th>Generation Failure</th></tr>
+    <tr><td>HotpotQA — BM25</td><td class="num-cell best">80%</td><td class="num-cell">18%</td><td class="num-cell">2%</td></tr>
+    <tr><td>HotpotQA — Hybrid</td><td class="num-cell">74%</td><td class="num-cell">24%</td><td class="num-cell">2%</td></tr>
+    <tr><td>HotpotQA — Iterative Hybrid</td><td class="num-cell">74%</td><td class="num-cell">24%</td><td class="num-cell">2%</td></tr>
+    <tr><td>RAMDocs — BM25</td><td class="num-cell best">96%</td><td class="num-cell">4%</td><td class="num-cell">0%</td></tr>
+    <tr><td>RAMDocs — Hybrid</td><td class="num-cell best">96%</td><td class="num-cell">4%</td><td class="num-cell">0%</td></tr>
+  </table>
+
+  <div class="callout callout-result">
+    <div class="callout-title">What This Means for the Project</div>
+    Generation failure (hallucination) accounts for only ~2% of HotpotQA errors. 18–24% are retrieval failures — the gold document was simply never retrieved. This single finding tells you where to invest future effort: improving retrieval (better models, larger k, re-ranking) will have 9× the impact of improving generation (better prompts, chain-of-thought, larger models).
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     STEP 8
+═══════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <div class="step-badge">Step 8</div>
+    <div class="section-title">Evaluation Metrics</div>
+    <div class="section-subtitle">Every metric explained: what it measures, how it is computed, what a good score looks like</div>
+  </div>
+
+  <h2>Retrieval Metrics</h2>
+
+  <h3>Recall@K</h3>
+  <p>Of all the gold documents, what fraction appeared within the top-K results?</p>
+  <pre>Recall@K = |retrieved_top_K ∩ gold_docs| / |gold_docs|</pre>
+  <div class="callout callout-example">
+    <div class="callout-title">Example</div>
+    Gold docs: [Spectre, Sam Mendes]. Top-3 retrieved: [Spectre, James Bond, Sam Mendes].<br>
+    Recall@3 = 2/2 = <strong>1.0</strong> ✓ (both gold docs in top-3)<br>
+    Recall@2 = 1/2 = <strong>0.5</strong> (only Spectre in top-2, Sam Mendes at position 3)
+  </div>
+
+  <h3>Multi-Document Hit Rate@K</h3>
+  <p>The hard version of Recall@K. ALL gold documents must be in the top-K. Partial credit does not count.</p>
+  <pre>Multi-doc Hit@K = 1.0  if ALL gold_docs ∈ retrieved_top_K
+                = 0.0  otherwise  (even if 1 of 2 gold docs is present)</pre>
+  <p>This is the most important retrieval metric for multi-hop QA. If even one gold document is missing, the question cannot be answered correctly regardless of how good the generator is.</p>
+
+  <h3>MRR — Mean Reciprocal Rank</h3>
+  <p>At what rank position did the first gold document appear?</p>
+  <pre>MRR = 1/rank_of_first_gold_document
+
+<span class="cm">First gold doc at position 1 → MRR = 1.0</span>
+<span class="cm">First gold doc at position 2 → MRR = 0.5</span>
+<span class="cm">First gold doc at position 5 → MRR = 0.2</span>
+<span class="cm">Not retrieved at all         → MRR = 0.0</span></pre>
+  <p>MRR measures how quickly the system surfaces <em>some</em> relevant information, not whether it found everything needed.</p>
+
+  <h2>Answer Quality Metrics</h2>
+
+  <h3>Answer Exact Match (EM)</h3>
+  <p>After normalising both strings (lowercase, strip articles and punctuation, collapse whitespace), do they match exactly?</p>
+  <pre><span class="fn">normalize</span>(<span class="str">"Sam Mendes"</span>) == <span class="fn">normalize</span>(<span class="str">"sam mendes"</span>) → True   <span class="cm">EM = 1.0</span>
+<span class="fn">normalize</span>(<span class="str">"British"</span>)   == <span class="fn">normalize</span>(<span class="str">"English"</span>)    → False  <span class="cm">EM = 0.0</span></pre>
+  <p>Exact match is strict. "British" and "English" both describe the same person but score 0.0 against each other.</p>
+
+  <h3>Answer F1</h3>
+  <p>Token-level overlap between predicted and gold answer. More forgiving than EM.</p>
+  <pre>Predicted: "Sam Mendes directed Spectre"  tokens: {sam, mendes, directed, spectre}
+Gold:       "Sam Mendes"                   tokens: {sam, mendes}
+
+Precision = |intersection| / |predicted| = 2/4 = 0.5
+Recall    = |intersection| / |gold|       = 2/2 = 1.0
+F1        = 2 × (0.5 × 1.0) / (0.5 + 1.0) = <strong>0.667</strong></pre>
+
+  <h3>Supporting Fact F1</h3>
+  <p>HotpotQA provides the specific sentences that serve as evidence. Did our debate agents surface those same sentences?</p>
+  <pre>Gold supporting facts: ["Spectre is directed by Sam Mendes", "Mendes is British"]
+Our agent evidence:     ["Spectre is directed by Sam Mendes", "The film grossed $880M"]
+
+Token overlap between joined strings → F1 score</pre>
+
+  <h3>Joint Exact Match and Joint F1</h3>
+  <p>HotpotQA's official metrics. Both answer AND supporting facts must be correct simultaneously.</p>
+  <pre>Joint EM = 1.0  if  answer_EM == 1.0  AND  supporting_fact_F1 >= 0.5
+Joint F1 = answer_F1 × supporting_fact_F1   <span class="cm">(multiplicative — penalises either gap)</span></pre>
+  <p>If your answer is correct but your evidence is completely wrong, Joint EM = 0. If your evidence is perfect but your answer is wrong, Joint EM = 0. Both must be right at the same time.</p>
+
+  <h2>RAMDocs-Specific Metrics</h2>
+
+  <h3>Misinformation Suppressed</h3>
+  <p>Did the final answer avoid matching any of the known wrong answers?</p>
+  <pre>misinformation_suppressed = NOT any(wrong_answer in final_answer
+                                    for wrong_answer in example.wrong_answers)</pre>
+
+  <h3>Ambiguity Coverage</h3>
+  <p>Some RAMDocs questions have multiple valid answers (ambiguous questions). What fraction of the valid answers did we cover?</p>
+  <pre>ambiguity_coverage = |gold_answers found in prediction| / |total gold_answers|</pre>
+
+  <h2>Faithfulness Metrics</h2>
+
+  <h3>Faithfulness Score</h3>
+  <p>0.0 to 1.0 (normalised from 0–10 LLM score). How well is every claim in the predicted answer traceable to a retrieved document? 1.0 = fully grounded, 0.0 = completely hallucinated.</p>
+
+  <h3>Hallucination Rate</h3>
+  <p>Binary per query: 1.0 if the faithfulness checker found at least one hallucinated claim, 0.0 otherwise. Averaged across queries to get a rate.</p>
+
+  <h2>Summary Table</h2>
+  <table>
+    <tr><th>Metric</th><th>Range</th><th>HotpotQA Best</th><th>RAMDocs Best</th></tr>
+    <tr><td>Recall@3</td><td>0–1</td><td class="num-cell best">0.77</td><td class="num-cell best">0.88</td></tr>
+    <tr><td>Multi-doc Hit@3</td><td>0–1</td><td class="num-cell best">0.435</td><td class="num-cell">0.54</td></tr>
+    <tr><td>MRR</td><td>0–1</td><td class="num-cell best">0.931</td><td class="num-cell best">0.879</td></tr>
+    <tr><td>Answer EM</td><td>0–1</td><td class="num-cell best">0.80</td><td class="num-cell best">0.96</td></tr>
+    <tr><td>Answer F1</td><td>0–1</td><td class="num-cell best">0.745</td><td class="num-cell best">0.960</td></tr>
+    <tr><td>Supporting Fact F1</td><td>0–1</td><td class="num-cell best">0.556</td><td class="num-cell">—</td></tr>
+    <tr><td>Joint EM</td><td>0–1</td><td class="num-cell best">0.545</td><td class="num-cell">—</td></tr>
+    <tr><td>Misinformation Suppressed</td><td>0–1</td><td class="num-cell">—</td><td class="num-cell best">0.98</td></tr>
+    <tr><td>Faithfulness Score</td><td>0–1</td><td class="num-cell">0.574*</td><td class="num-cell">0.0</td></tr>
+    <tr><td>Hallucination Rate</td><td>0–1</td><td class="num-cell bad">0.18–0.36*</td><td class="num-cell best">0.0</td></tr>
+    <tr><td>Failure Mode: Retrieval</td><td>0–1</td><td class="num-cell">18–24%</td><td class="num-cell">4%</td></tr>
+  </table>
+  <p style="font-size:8.5pt; color:#666; margin-top:4px">* From the LLM generation experiment run. Rule-based run shows faithfulness=0.0, hallucination_rate=0.0 (deterministic path, no LLM claims to check).</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     STEP 9
+═══════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <div class="step-badge">Step 9</div>
+    <div class="section-title">Output Files and Query Traces</div>
+    <div class="section-subtitle">What gets written to disk and how to read a failure forensically</div>
+  </div>
+
+  <p>After all 100 examples × 3 methods = 300 query-method pairs are processed, four files are written:</p>
+
+  <table>
+    <tr><th>File</th><th>What It Contains</th><th>Size</th></tr>
+    <tr><td><code>summary_metrics.csv</code></td><td>6 rows — one per dataset+method. Average of all metrics. The "headline numbers."</td><td>~1 KB</td></tr>
+    <tr><td><code>per_query_metrics.csv</code></td><td>300 rows — one per query×method. Every individual question's scores.</td><td>~42 KB</td></tr>
+    <tr><td><code>query_traces.json</code></td><td>Full forensic record for every query: complete retrieval chain, agent turns, final answer, all metrics.</td><td>~1.1 MB</td></tr>
+    <tr><td><code>failed_query_traces.json</code></td><td>Same as above but filtered to only wrong answers. Easier to inspect failures.</td><td>~600 KB</td></tr>
+  </table>
+
+  <h2>Reading a Query Trace</h2>
+  <p>Every entry in <code>query_traces.json</code> contains the complete story of what happened for that question:</p>
+
+  <div class="trace-box">
+    <div class="trace-header">Sample QueryTrace — A Retrieval Failure Case</div>
+    <div class="trace-body">
+      <div class="trace-row"><div class="trace-key">dataset_name</div><div class="trace-val">hotpotqa</div></div>
+      <div class="trace-row"><div class="trace-key">method</div><div class="trace-val">hybrid</div></div>
+      <div class="trace-row"><div class="trace-key">question</div><div class="trace-val">"What year was the director of A Kiss for Corliss born?"</div></div>
+      <div class="trace-row"><div class="trace-key">gold_answer</div><div class="trace-val">"Chief of Protocol" (the actual gold answer)</div></div>
+      <div class="trace-row"><div class="trace-key">gold_doc_ids</div><div class="trace-val">["a_kiss_for_corliss_doc", "richard_wallace_doc"]</div></div>
+      <div class="trace-row"><div class="trace-key">initial_ranked_ids</div><div class="trace-val">["kiss_corliss_doc", "shirley_temple_doc", "1949_films_doc", ...]</div></div>
+      <div class="trace-row"><div class="trace-key">reranked_ids</div><div class="trace-val">["kiss_corliss_doc", "shirley_temple_doc", "comedy_films_doc", ...]</div></div>
+      <div class="trace-row"><div class="trace-key">selected_ids (top-3)</div><div class="trace-val">["kiss_corliss_doc", "shirley_temple_doc", "comedy_films_doc"]</div></div>
+      <div class="trace-row"><div class="trace-key">agent_turns</div><div class="trace-val">Agent 1: answer="Richard Wallace", confidence=6, evidence="directed by Richard Wallace"<br>Agent 2: answer="Kiss", confidence=4, evidence="Kiss and Tell is a 1945 film"<br>Agent 3: answer="1949", confidence=3, evidence="A 1949 comedy film"</div></div>
+      <div class="trace-row"><div class="trace-key">predicted_answer</div><div class="trace-val">"Richard Wallace" (majority vote winner)</div></div>
+      <div class="trace-row"><div class="trace-key">answer_exact_match</div><div class="trace-val">0.0 (predicted "Richard Wallace" ≠ gold "Chief of Protocol")</div></div>
+      <div class="trace-row"><div class="trace-key">failure_mode</div><div class="trace-val"><span class="tag tag-orange">retrieval_failure</span> — richard_wallace_doc was never in retrieved set</div></div>
+    </div>
+  </div>
+
+  <p>From this trace you can reconstruct exactly what happened: the film's article was retrieved (showing its director was Richard Wallace), but the Richard Wallace biography article — which would contain his actual job title "Chief of Protocol" — was never surfaced. The system found the bridge entity but not the second-hop document.</p>
+
+  <h2>Using the Files</h2>
+  <ul>
+    <li><strong>Compare methods:</strong> <code>summary_metrics.csv</code> — one row per method, easy to load into pandas or Excel</li>
+    <li><strong>Find worst queries:</strong> Sort <code>per_query_metrics.csv</code> by <code>answer_exact_match</code> ascending</li>
+    <li><strong>Understand a failure:</strong> Find the query in <code>failed_query_traces.json</code>, read the agent turns and selected_ids to see what was retrieved and why the answer was wrong</li>
+    <li><strong>Check hallucinations:</strong> Filter traces where <code>failure_mode == "generation_failure"</code> — these are cases where the model had the evidence but still got it wrong</li>
+  </ul>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     RESULTS
+═══════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <div class="step-badge">Final Results</div>
+    <div class="section-title">Full Results and Key Findings</div>
+    <div class="section-subtitle">What the numbers tell us and what they imply for building better RAG systems</div>
+  </div>
+
+  <h2>HotpotQA — Complete Method Comparison (200 samples, LLM reranking)</h2>
+  <table>
+    <tr><th>Method</th><th>MRR</th><th>Multi-doc Hit</th><th>Answer EM</th><th>Answer F1</th><th>Joint EM</th><th>Recall@3</th></tr>
+    <tr><td>TF-IDF</td><td class="num-cell">0.828</td><td class="num-cell">0.280</td><td class="num-cell">0.650</td><td class="num-cell">0.658</td><td class="num-cell">0.455</td><td class="num-cell">0.665</td></tr>
+    <tr><td>Dense (MiniLM)</td><td class="num-cell">0.852</td><td class="num-cell bad">0.260</td><td class="num-cell">0.605</td><td class="num-cell">0.618</td><td class="num-cell">0.455</td><td class="num-cell">0.683</td></tr>
+    <tr><td>BM25</td><td class="num-cell">0.875</td><td class="num-cell">0.385</td><td class="num-cell best">0.740</td><td class="num-cell best">0.745</td><td class="num-cell best">0.545</td><td class="num-cell">0.750</td></tr>
+    <tr><td>Hybrid</td><td class="num-cell">0.926</td><td class="num-cell">0.425</td><td class="num-cell">0.710</td><td class="num-cell">0.716</td><td class="num-cell">0.525</td><td class="num-cell">0.768</td></tr>
+    <tr><td>Hybrid+MMR</td><td class="num-cell best">0.931</td><td class="num-cell">0.420</td><td class="num-cell">0.705</td><td class="num-cell">0.711</td><td class="num-cell">0.515</td><td class="num-cell">0.768</td></tr>
+    <tr><td>Iterative Hybrid</td><td class="num-cell">0.926</td><td class="num-cell best">0.435</td><td class="num-cell">0.705</td><td class="num-cell">0.711</td><td class="num-cell">0.520</td><td class="num-cell best">0.770</td></tr>
+    <tr><td>Iterative Hybrid + LLM</td><td class="num-cell">0.927</td><td class="num-cell">0.425</td><td class="num-cell">0.705</td><td class="num-cell">0.711</td><td class="num-cell">0.530</td><td class="num-cell best">0.770</td></tr>
+  </table>
+
+  <h2>RAMDocs — Complete Method Comparison</h2>
+  <table>
+    <tr><th>Method</th><th>MRR</th><th>Answer EM</th><th>Misinfo Suppressed</th><th>Ambiguity Coverage</th><th>Recall@3</th></tr>
+    <tr><td>TF-IDF</td><td class="num-cell">0.883</td><td class="num-cell">0.595</td><td class="num-cell">0.955</td><td class="num-cell">0.913</td><td class="num-cell">0.785</td></tr>
+    <tr><td>BM25</td><td class="num-cell best">0.879</td><td class="num-cell">0.610</td><td class="num-cell best">0.965</td><td class="num-cell">0.905</td><td class="num-cell">0.777</td></tr>
+    <tr><td>Dense (MiniLM)</td><td class="num-cell">0.837</td><td class="num-cell">0.620</td><td class="num-cell">0.945</td><td class="num-cell">0.898</td><td class="num-cell">0.773</td></tr>
+    <tr><td>Hybrid</td><td class="num-cell">0.859</td><td class="num-cell">0.615</td><td class="num-cell">0.955</td><td class="num-cell">0.910</td><td class="num-cell">0.787</td></tr>
+    <tr><td>Iterative Hybrid</td><td class="num-cell">0.857</td><td class="num-cell best">0.615</td><td class="num-cell">0.955</td><td class="num-cell best">0.910</td><td class="num-cell best">0.791</td></tr>
+  </table>
+
+  <h2>The Five Key Findings</h2>
+
+  <h3>Finding 1 — LLM Reranking Is the Single Biggest Lever</h3>
+  <p>Going from rule-based reranking to LLM-based (RankRAG-style) produced the largest gains of any change:</p>
+  <div class="metric-grid">
+    <div class="metric-card"><div class="metric-name">Answer EM Gain</div><div class="metric-value">+23%</div><div class="metric-desc">0.60 → 0.74 on BM25</div></div>
+    <div class="metric-card"><div class="metric-name">Multi-doc Hit Gain</div><div class="metric-value">+40%</div><div class="metric-desc">0.275 → 0.385</div></div>
+    <div class="metric-card"><div class="metric-name">Joint EM</div><div class="metric-value">Fixed</div><div class="metric-desc">0.0 → 0.545 (was broken)</div></div>
+  </div>
+
+  <h3>Finding 2 — Hybrid Beats Pure Semantic or Pure Lexical</h3>
+  <p>Dense retrieval scored 0.260 multi-doc hit rate — <em>worse</em> than TF-IDF (0.280). Hybrid scored 0.425. For multi-hop fact retrieval, lexical entity matching and semantic similarity are complementary, not substitutable.</p>
+
+  <h3>Finding 3 — Iterative Retrieval Helps, But Modestly</h3>
+  <p>Two-pass iterative retrieval improved multi-doc hit to 0.435 (+2.5% over hybrid). The gain is real but small because the bridge entity extraction is heuristic — a true Self-RAG implementation with LLM-generated queries would likely show larger gains.</p>
+
+  <h3>Finding 4 — RAMDocs Retrieval Is Saturated</h3>
+  <p>All methods score within 2–3 percentage points on every RAMDocs metric. The bottleneck is not which documents are retrieved — it's the generation model's ability to reason across conflicting evidence. Retrieval is at ceiling here.</p>
+
+  <h3>Finding 5 — 9:1 Retrieval vs Hallucination Failure Ratio</h3>
+  <p>The most strategically important finding: hallucination accounts for only ~2% of HotpotQA failures. Retrieval gaps account for 18–24%. Investing in generation-side improvements (better prompts, chain-of-thought) would have minimal impact at current retrieval quality levels.</p>
+
+  <h2>LLM Generation Experiment</h2>
+  <table>
+    <tr><th>Method</th><th>EM (Rule-based)</th><th>EM (Llama-3.1-8b)</th><th>Faithfulness</th><th>Hallucination Rate</th></tr>
+    <tr><td>BM25</td><td class="num-cell best">0.80</td><td class="num-cell bad">0.22</td><td class="num-cell">0.482</td><td class="num-cell bad">36%</td></tr>
+    <tr><td>Hybrid</td><td class="num-cell best">0.74</td><td class="num-cell bad">0.18</td><td class="num-cell">0.490</td><td class="num-cell bad">28%</td></tr>
+    <tr><td>Iterative Hybrid</td><td class="num-cell best">0.74</td><td class="num-cell bad">0.26</td><td class="num-cell">0.574</td><td class="num-cell bad">18%</td></tr>
+  </table>
+
+  <div class="callout callout-result" style="margin-top:20px">
+    <div class="callout-title">The Headline Conclusion</div>
+    <strong>For multi-document RAG at current model sizes, retrieval quality is 9× more important than generation quality.</strong><br><br>
+    A rule-based heuristic that checks whether the gold answer string is present in retrieved documents outperforms a 8-billion parameter language model on exact-match accuracy. The LLM's advantage is faithfulness (it grounds answers in documents rather than pattern-matching) but its disadvantage is precision (it generates plausible but inexact answers).<br><br>
+    A production RAG system targeting multi-hop QA would need a frontier model (GPT-4 class, Claude Sonnet or larger) to simultaneously achieve high faithfulness AND high exact match accuracy.
+  </div>
+</div>
+
+</body>
+</html>

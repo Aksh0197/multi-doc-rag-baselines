@@ -1,0 +1,73 @@
+%% Minimal NeurIPS-compatible style: neurips_2026.sty
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{neurips_2026}[2026/01/01 NeurIPS 2026 style]
+
+% ── Options (accepted, silently ignored for compatibility) ────────
+\DeclareOption{main}{}
+\DeclareOption{final}{}
+\DeclareOption{preprint}{}
+\DeclareOption{nonatbib}{}
+\DeclareOption{eandd}{}
+\DeclareOption{position}{}
+\DeclareOption{creativeai}{}
+\DeclareOption{sglblindworkshop}{}
+\DeclareOption{dblblindworkshop}{}
+\ProcessOptions\relax
+
+% ── Page layout ───────────────────────────────────────────────────
+\RequirePackage[
+  paperwidth=8.5in, paperheight=11in,
+  left=1.5in, right=1.0in,
+  top=1.0in,  bottom=1.0in
+]{geometry}
+
+% ── Fonts (use fontspec-safe approach with tectonic/XeLaTeX) ──────
+% Do NOT load `times` — it pulls in Courier T1 which crashes XeLaTeX.
+% The main.tex already loads [T1]{fontenc}; leave font selection to it.
+
+% ── Disable microtype to keep things simple ───────────────────────
+\PassOptionsToPackage{disable}{microtype}
+
+% ── Spacing ───────────────────────────────────────────────────────
+\RequirePackage{setspace}
+\setlength{\parskip}{4pt}
+\setlength{\parindent}{0pt}
+
+% ── Section headings ──────────────────────────────────────────────
+\RequirePackage{titlesec}
+\titleformat{\section}{\large\bfseries}{\thesection}{1em}{}[\vspace{-2pt}]
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection}{1em}{}
+\titlespacing*{\section}{0pt}{10pt}{4pt}
+\titlespacing*{\subsection}{0pt}{8pt}{2pt}
+
+% ── Multi-author ──────────────────────────────────────────────────
+% Use \and (article.cls built-in) in the author block — NOT \And.
+% \And / \AND defined here for template compatibility only (no-ops).
+\providecommand{\And}{\and}
+\providecommand{\AND}{\and}
+\newcommand{\workshoptitle}[1]{}
+% \maketitle is NOT redefined — article.cls default handles correctly.
+
+% ── Abstract ──────────────────────────────────────────────────────
+\renewenvironment{abstract}{%
+  \begin{center}
+    {\bfseries\large Abstract}
+  \end{center}
+  \begin{quote}\small\setlength{\parskip}{4pt}
+}{%
+  \end{quote}\vskip 6pt
+}
+
+% ── Acknowledgements ──────────────────────────────────────────────
+\newenvironment{ack}{%
+  \section*{Acknowledgments and Disclosure of Funding}
+}{%
+  \par\vskip 6pt
+}
+
+% ── Bibliography ─────────────────────────────────────────────────
+\RequirePackage{natbib}
+\setlength{\bibsep}{2pt}
+
+\endinput

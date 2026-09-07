@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1160" viewBox="0 0 1000 1160" font-family="Arial, Helvetica, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#1F4E79"/>
+    </marker>
+    <filter id="shadow">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1000" height="1160" fill="#F8FAFC"/>
+
+  <!-- Title bar -->
+  <rect x="0" y="0" width="1000" height="72" fill="#1F4E79"/>
+  <text x="500" y="36" text-anchor="middle" font-size="22" font-weight="bold" fill="white">RAG Pipeline — Architecture &amp; Data Flow</text>
+  <text x="500" y="58" text-anchor="middle" font-size="12" fill="#BDD7EE">Multi-Document Retrieval-Augmented Generation  ·  HotpotQA + RAMDocs  ·  April 2026</text>
+
+  <!-- ── STAGE 0: User Query ── -->
+  <rect x="350" y="88" width="300" height="48" rx="24" fill="#1F4E79" filter="url(#shadow)"/>
+  <text x="500" y="118" text-anchor="middle" font-size="15" font-weight="bold" fill="white">User Query</text>
+
+  <!-- arrow -->
+  <line x1="500" y1="136" x2="500" y2="158" stroke="#1F4E79" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- ── STAGE 1: Data Loading ── -->
+  <rect x="80" y="160" width="840" height="94" rx="8" fill="#EBF3FB" stroke="#2E75B6" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="500" y="182" text-anchor="middle" font-size="12" font-weight="bold" fill="#1F4E79">STAGE 1 — Data Loading</text>
+
+  <rect x="104" y="191" width="355" height="48" rx="6" fill="#DEEAF1" stroke="#2E75B6" stroke-width="1"/>
+  <text x="281" y="210" text-anchor="middle" font-size="12" font-weight="bold" fill="#1F4E79">HotpotQA</text>
+  <text x="281" y="228" text-anchor="middle" font-size="10" fill="#404040">200 samples · two-hop reasoning · 10 distractor docs per question</text>
+
+  <rect x="541" y="191" width="355" height="48" rx="6" fill="#DEEAF1" stroke="#2E75B6" stroke-width="1"/>
+  <text x="718" y="210" text-anchor="middle" font-size="12" font-weight="bold" fill="#1F4E79">RAMDocs</text>
+  <text x="718" y="228" text-anchor="middle" font-size="10" fill="#404040">200 queries · conflict resolution · misleading / contradictory docs</text>
+
+  <!-- arrow -->
+  <line x1="500" y1="254" x2="500" y2="276" stroke="#1F4E79" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- ── STAGE 2: Dense Encoding ── -->
+  <rect x="80" y="278" width="840" height="58" rx="8" fill="#EBF3FB" stroke="#2E75B6" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="500" y="299" text-anchor="middle" font-size="12" font-weight="bold" fill="#1F4E79">STAGE 2 — Batch Dense Encoding</text>
+  <text x="500" y="317" text-anchor="middle" font-size="10.5" fill="#404040">sentence-transformers/all-MiniLM-L6-v2  ·  All documents pre-encoded upfront in one batched call (batch_size=64)  ·  ~40 sec total</text>
+
+  <!-- arrow -->
+  <line x1="500" y1="336" x2="500" y2="358" stroke="#1F4E79" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- ── STAGE 3: Retrieval Methods ── -->
+  <rect x="80" y="360" width="840" height="175" rx="8" fill="#EBF3FB" stroke="#2E75B6" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="500" y="381" text-anchor="middle" font-size="12" font-weight="bold" fill="#1F4E79">STAGE 3 — Retrieval  (6 methods evaluated in parallel)</text>
+
+  <!-- Row 1 -->
+  <rect x="100" y="389" width="182" height="52" rx="6" fill="#DEEAF1" stroke="#2E75B6" stroke-width="1"/>
+  <text x="191" y="409" text-anchor="middle" font-size="12" font-weight="bold" fill="#1F4E79">TF-IDF</text>
+  <text x="191" y="426" text-anchor="middle" font-size="10" fill="#404040">Term-frequency baseline</text>
+  <text x="191" y="436" text-anchor="middle" font-size="9" fill="#808080">Hit@3: 0.280</text>
+
+  <rect x="409" y="389" width="182" height="52" rx="6" fill="#DEEAF1" stroke="#2E75B6" stroke-width="1"/>
+  <text x="500" y="409" text-anchor="middle" font-size="12" font-weight="bold" fill="#1F4E79">BM25</text>
+  <text x="500" y="426" text-anchor="middle" font-size="10" fill="#404040">Best lexical retriever</text>
+  <text x="500" y="436" text-anchor="middle" font-size="9" fill="#808080">Hit@3: 0.385  ·  EM: 0.740</text>
+
+  <rect x="718" y="389" width="182" height="52" rx="6" fill="#DEEAF1" stroke="#2E75B6" stroke-width="1"/>
+  <text x="809" y="409" text-anchor="middle" font-size="12" font-weight="bold" fill="#1F4E79">Dense (MiniLM)</text>
+  <text x="809" y="426" text-anchor="middle" font-size="10" fill="#404040">Semantic similarity</text>
+  <text x="809" y="436" text-anchor="middle" font-size="9" fill="#808080">Hit@3: 0.260  (entity-heavy tasks: weaker)</text>
+
+  <!-- Row 2 -->
+  <rect x="100" y="452" width="182" height="68" rx="6" fill="#D4E6F1" stroke="#2E75B6" stroke-width="1.5"/>
+  <text x="191" y="471" text-anchor="middle" font-size="12" font-weight="bold" fill="#1F4E79">Hybrid</text>
+  <text x="191" y="487" text-anchor="middle" font-size="10" fill="#404040">BM25 + Dense fusion</text>
+  <text x="191" y="501" text-anchor="middle" font-size="9" fill="#808080">Hit@3: 0.425  ·  MRR: 0.926</text>
+  <text x="191" y="513" text-anchor="middle" font-size="10" font-weight="bold" fill="#1F4E79">★ Strongest base</text>
+
+  <rect x="409" y="452" width="182" height="68" rx="6" fill="#D4E6F1" stroke="#2E75B6" stroke-width="1.5"/>
+  <text x="500" y="471" text-anchor="middle" font-size="12" font-weight="bold" fill="#1F4E79">Hybrid + MMR</text>
+  <text x="500" y="487" text-anchor="middle" font-size="10" fill="#404040">Hybrid + diversity penalty</text>
+  <text x="500" y="501" text-anchor="middle" font-size="9" fill="#808080">Hit@3: 0.420  ·  MRR: 0.931</text>
+  <text x="500" y="513" text-anchor="middle" font-size="9" fill="#606060">marginal gain over Hybrid</text>
+
+  <rect x="718" y="452" width="182" height="68" rx="6" fill="#E2EFDA" stroke="#538135" stroke-width="1.5"/>
+  <text x="809" y="471" text-anchor="middle" font-size="12" font-weight="bold" fill="#1F4E79">Iterative Hybrid</text>
+  <text x="809" y="487" text-anchor="middle" font-size="10" fill="#404040">2-pass + LLM bridge entity</text>
+  <text x="809" y="501" text-anchor="middle" font-size="9" fill="#808080">Hit@3: 0.435  ·  best multi-doc</text>
+  <text x="809" y="513" text-anchor="middle" font-size="10" font-weight="bold" fill="#375623">★ Best multi-doc hit</text>
+
+  <!-- arrow -->
+  <line x1="500" y1="535" x2="500" y2="557" stroke="#1F4E79" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- ── STAGE 4: LLM Reranking ── -->
+  <rect x="80" y="559" width="840" height="72" rx="8" fill="#E2EFDA" stroke="#538135" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="500" y="580" text-anchor="middle" font-size="12" font-weight="bold" fill="#1F4E79">STAGE 4 — LLM Reranking  (RankRAG-style)</text>
+  <text x="500" y="598" text-anchor="middle" font-size="10.5" fill="#404040">Claude Haiku scores each candidate document 0–10 for relevance  ·  Top-10 candidates → final top-3 selected</text>
+  <text x="500" y="620" text-anchor="middle" font-size="11" font-weight="bold" fill="#375623">Biggest single improvement: Answer EM +0.14 (+23%)  ·  Multi-doc Hit +0.10 (+36%)</text>
+
+  <!-- arrow -->
+  <line x1="500" y1="631" x2="500" y2="653" stroke="#1F4E79" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- ── STAGE 5: Debate ── -->
+  <rect x="80" y="655" width="840" height="62" rx="8" fill="#FFF2CC" stroke="#BF8F00" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="500" y="676" text-anchor="middle" font-size="12" font-weight="bold" fill="#7F5700">STAGE 5 — Multi-Agent Debate  (MADAM-RAG rule-based)</text>
+  <text x="500" y="695" text-anchor="middle" font-size="10.5" fill="#7F5700">Extracts evidence sentences from top-3 docs  ·  Aggregates answer  ·  Suppresses misinformation from misleading docs</text>
+
+  <!-- arrow -->
+  <line x1="500" y1="717" x2="500" y2="739" stroke="#1F4E79" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- ── STAGE 6: Evaluation ── -->
+  <rect x="80" y="741" width="840" height="118" rx="8" fill="#EBF3FB" stroke="#2E75B6" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="500" y="762" text-anchor="middle" font-size="12" font-weight="bold" fill="#1F4E79">STAGE 6 — Evaluation Engine  (12 metrics)</text>
+
+  <rect x="100" y="770" width="248" height="40" rx="5" fill="#DEEAF1" stroke="#2E75B6" stroke-width="1"/>
+  <text x="224" y="784" text-anchor="middle" font-size="10" font-weight="bold" fill="#1F4E79">Retrieval Quality</text>
+  <text x="224" y="801" text-anchor="middle" font-size="9.5" fill="#404040">MRR · Recall@2/3/5/10 · Multi-doc Hit</text>
+
+  <rect x="376" y="770" width="248" height="40" rx="5" fill="#DEEAF1" stroke="#2E75B6" stroke-width="1"/>
+  <text x="500" y="784" text-anchor="middle" font-size="10" font-weight="bold" fill="#1F4E79">Answer Quality</text>
+  <text x="500" y="801" text-anchor="middle" font-size="9.5" fill="#404040">Answer EM · Answer F1 · Joint EM · Joint F1</text>
+
+  <rect x="652" y="770" width="248" height="40" rx="5" fill="#DEEAF1" stroke="#2E75B6" stroke-width="1"/>
+  <text x="776" y="784" text-anchor="middle" font-size="10" font-weight="bold" fill="#1F4E79">Robustness</text>
+  <text x="776" y="801" text-anchor="middle" font-size="9.5" fill="#404040">Misinfo Suppressed · Ambiguity Coverage</text>
+
+  <rect x="238" y="818" width="524" height="30" rx="5" fill="#DEEAF1" stroke="#2E75B6" stroke-width="1"/>
+  <text x="500" y="828" text-anchor="middle" font-size="10" font-weight="bold" fill="#1F4E79">Reasoning Quality</text>
+  <text x="500" y="841" text-anchor="middle" font-size="9.5" fill="#404040">Supporting Fact F1  (HotpotQA: checks which evidence sentences were used)</text>
+
+  <!-- arrow -->
+  <line x1="500" y1="859" x2="500" y2="881" stroke="#1F4E79" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- ── STAGE 7: Failure Mode ── -->
+  <rect x="80" y="883" width="840" height="130" rx="8" fill="#FCE4D6" stroke="#C55A11" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="500" y="904" text-anchor="middle" font-size="12" font-weight="bold" fill="#843C0C">STAGE 7 — RAGChecker Failure Mode Analysis  (deterministic)</text>
+  <text x="500" y="921" text-anchor="middle" font-size="10.5" fill="#843C0C">Classifies every wrong answer: was it a retrieval miss or a hallucination?  ·  No LLM calls required</text>
+
+  <rect x="100" y="930" width="228" height="68" rx="6" fill="#E2EFDA" stroke="#538135" stroke-width="2"/>
+  <text x="214" y="950" text-anchor="middle" font-size="13" font-weight="bold" fill="#375623">CORRECT</text>
+  <text x="214" y="966" text-anchor="middle" font-size="10" fill="#404040">Answer exact match = 1.0</text>
+  <text x="214" y="980" text-anchor="middle" font-size="10" fill="#375623">HotpotQA: 74–80%</text>
+  <text x="214" y="992" text-anchor="middle" font-size="10" fill="#375623">RAMDocs: 96%</text>
+
+  <rect x="386" y="930" width="228" height="68" rx="6" fill="#FCE4D6" stroke="#C55A11" stroke-width="2"/>
+  <text x="500" y="950" text-anchor="middle" font-size="12" font-weight="bold" fill="#843C0C">RETRIEVAL FAILURE</text>
+  <text x="500" y="966" text-anchor="middle" font-size="10" fill="#404040">Gold doc missing from top-3</text>
+  <text x="500" y="980" text-anchor="middle" font-size="10" fill="#843C0C">HotpotQA: 18–24%</text>
+  <text x="500" y="992" text-anchor="middle" font-size="10" font-weight="bold" fill="#843C0C">← Main bottleneck</text>
+
+  <rect x="672" y="930" width="228" height="68" rx="6" fill="#FFF2CC" stroke="#BF8F00" stroke-width="2"/>
+  <text x="786" y="950" text-anchor="middle" font-size="12" font-weight="bold" fill="#7F5700">GENERATION FAILURE</text>
+  <text x="786" y="966" text-anchor="middle" font-size="10" fill="#404040">Docs present, answer still wrong</text>
+  <text x="786" y="980" text-anchor="middle" font-size="10" fill="#7F5700">HotpotQA: only 2%</text>
+  <text x="786" y="992" text-anchor="middle" font-size="10" fill="#7F5700">(hallucination rate)</text>
+
+  <!-- Key finding -->
+  <rect x="80" y="1033" width="840" height="52" rx="8" fill="#1F4E79" filter="url(#shadow)"/>
+  <text x="500" y="1055" text-anchor="middle" font-size="14" font-weight="bold" fill="white">KEY FINDING: Failure ratio is 9:1  (Retrieval Failures : Hallucinations)</text>
+  <text x="500" y="1074" text-anchor="middle" font-size="11" fill="#BDD7EE">The path to better performance is better retrieval — not better generation or hallucination mitigation</text>
+
+  <!-- Legend -->
+  <rect x="80" y="1105" width="840" height="40" rx="6" fill="#F0F0F0" stroke="#CCCCCC" stroke-width="1"/>
+  <rect x="110" y="1118" width="13" height="13" rx="2" fill="#EBF3FB" stroke="#2E75B6" stroke-width="1"/>
+  <text x="128" y="1129" font-size="10" fill="#404040">Core Stage</text>
+  <rect x="225" y="1118" width="13" height="13" rx="2" fill="#E2EFDA" stroke="#538135" stroke-width="1"/>
+  <text x="243" y="1129" font-size="10" fill="#404040">Best Performer</text>
+  <rect x="365" y="1118" width="13" height="13" rx="2" fill="#FFF2CC" stroke="#BF8F00" stroke-width="1"/>
+  <text x="383" y="1129" font-size="10" fill="#404040">Rule-based Component</text>
+  <rect x="540" y="1118" width="13" height="13" rx="2" fill="#FCE4D6" stroke="#C55A11" stroke-width="1"/>
+  <text x="558" y="1129" font-size="10" fill="#404040">Failure Analysis</text>
+  <rect x="680" y="1118" width="13" height="13" rx="2" fill="#1F4E79"/>
+  <text x="698" y="1129" font-size="10" fill="#404040">Key Finding</text>
+</svg>
